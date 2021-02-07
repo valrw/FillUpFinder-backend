@@ -26,7 +26,7 @@ app.get('/api/vehicle/:make/:model/:year', (req, res) => {
 
                         // nothing came up for that make + year
                         if (!response.data) {
-                            res.status(404).send({ message: 'Vehicle not found.' });
+                            res.status(404).json({ message: 'Vehicle not found.' });
                         } 
                         // match(es) found for that make + year
                         // return options for "did you mean" based on whether they include the entered model name
@@ -47,12 +47,17 @@ app.get('/api/vehicle/:make/:model/:year', (req, res) => {
                                 }
                             }
 
-                            res.status(300).send(options);
+                            if (options.length >= 1) {
+                                res.status(300).json(options);
+                            } else {
+                                res.status(404).json({ message: 'Vehicle not found.' });
+                            }
+                            
                         }
                     })
                     .catch((error) => {
                         console.log(error);
-                        res.status(500).send(error);
+                        res.status(500).json(error);
                     })
             }
 
@@ -72,7 +77,7 @@ app.get('/api/vehicle/:make/:model/:year', (req, res) => {
                         console.log(response);
                         let mpg = response.data.comb08; // combination city + highway for primary fuel type
                         console.log("MPG is " + mpg);
-                        res.status(200).send({
+                        res.status(200).json({
                             mpg: mpg,
                             make: response.data.make,
                             model: response.data.model,
@@ -80,12 +85,13 @@ app.get('/api/vehicle/:make/:model/:year', (req, res) => {
                         })
                     })
                     .catch((error) => {
-                        res.status(500).send(error);
+                        console.log("");
+                        res.status(500).json(error);
                     })
             }
         })
         .catch((error) => {
-            res.status(500).send(error);
+            res.status(500).json(error);
         })
 });
 
