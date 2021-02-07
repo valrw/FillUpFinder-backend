@@ -30,12 +30,12 @@ app.get("/api/vehicle/:make/:model/:year", (req, res) => {
 
             // nothing came up for that make + year
             if (!response.data) {
-              res.status(404).send({ message: "Vehicle not found." });
-            }
+                res.status(404).send({ message: 'Vehicle not found.' });
+            } 
             // match(es) found for that make + year
             // return options for "did you mean" based on whether they include the entered model name
             else {
-              let options = [];
+                let options = [];
               // multiple matches
               if (Array.isArray(response.data.menuItem)) {
                 for (let i = 0; i < response.data.menuItem.length; i++) {
@@ -56,14 +56,18 @@ app.get("/api/vehicle/:make/:model/:year", (req, res) => {
                 }
               }
 
-              res.status(300).send(options);
+                if (options.length >= 1) {
+                    res.status(300).send(options);
+                } else {
+                    res.status(404).send({ message: 'Vehicle not found.' });
+                }
+
             }
           })
           .catch((error) => {
-            console.log(error);
-            res.status(500).send(error);
-          });
-      }
+              console.log(error);
+              res.status(500).send(error);
+          })
 
       // search came back successful
       else {
