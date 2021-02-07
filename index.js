@@ -1,6 +1,7 @@
 import express from "express";
 import axios from "axios";
 import API_KEY from "./api-key.js";
+import PolyLine from "@mapbox/polyline";
 
 const app = express();
 
@@ -107,7 +108,15 @@ app.get(
     axios
       .get(requestUrl)
       .then((response) => {
-        let points = response.data.routes[0].overview_polyline.points;
+        let points = PolyLine.decode(
+          response.data.routes[0].overview_polyline.points
+        );
+        let coords = points.map((point, index) => {
+          return {
+            latitude: point[0],
+            longitude: point[1],
+          };
+        });
 
         let distance = 0;
         let duration = 0;
@@ -119,7 +128,7 @@ app.get(
         }
 
         let directions = {
-          route: points,
+          route: coords,
           distance: distance,
           duration: duration,
         };
