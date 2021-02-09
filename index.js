@@ -69,6 +69,8 @@ app.get("/api/vehicle/:make/:model/:year", (req, res) => {
               res.status(500).send(error);
           })
 
+        }
+
       // search came back successful
       else {
         let id;
@@ -86,8 +88,10 @@ app.get("/api/vehicle/:make/:model/:year", (req, res) => {
             console.log(response);
             let mpg = response.data.comb08; // combination city + highway for primary fuel type
             console.log("MPG is " + mpg);
+            let fuelCap = 15; // PLACEHOLDER until we can get fuel tank capacity data
             res.status(200).send({
               mpg: mpg,
+              fuelCap: fuelCap,
               make: response.data.make,
               model: response.data.model,
               year: response.data.year,
@@ -131,10 +135,29 @@ app.get(
           duration += legs[i].duration.value;
         }
 
+        let stops;
+        if (req.params.calcOnGas) {
+            let mpg = req.params.mpg;
+            let fuelCap = req.params.fuelCap;
+            let fuelLeft = req.params.fuelLeft;
+            let distMiles = distance / 1609.344; // convert from meters to miles
+
+            let initDist = mpg * (fuelLeft - 0.1 * fuelCap); // distance in miles that can be traveled before first stop
+            stops = 0;
+
+            if (initDist < distMiles) {
+                stops = 1 + Math.floor((distMiles - initDist) / (mpg * (0.9 * fuelCap)));
+            }
+        } else {
+            // this doesn't actually work right now
+            stops = req.params.numStops;
+        }
+
         let directions = {
           route: coords,
           distance: distance,
           duration: duration,
+          stops: stops,
         };
         res.status(200).send(directions);
       })
