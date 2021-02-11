@@ -30,12 +30,12 @@ app.get("/api/vehicle/:make/:model/:year", (req, res) => {
 
             // nothing came up for that make + year
             if (!response.data) {
-                res.status(404).send({ message: 'Vehicle not found.' });
-            } 
+              res.status(404).send({ message: "Vehicle not found." });
+            }
             // match(es) found for that make + year
             // return options for "did you mean" based on whether they include the entered model name
             else {
-                let options = [];
+              let options = [];
               // multiple matches
               if (Array.isArray(response.data.menuItem)) {
                 for (let i = 0; i < response.data.menuItem.length; i++) {
@@ -56,20 +56,18 @@ app.get("/api/vehicle/:make/:model/:year", (req, res) => {
                 }
               }
 
-                if (options.length >= 1) {
-                    res.status(300).send(options);
-                } else {
-                    res.status(404).send({ message: 'Vehicle not found.' });
-                }
-
+              if (options.length >= 1) {
+                res.status(300).send(options);
+              } else {
+                res.status(404).send({ message: "Vehicle not found." });
+              }
             }
           })
           .catch((error) => {
-              console.log(error);
-              res.status(500).send(error);
-          })
-
-        }
+            console.log(error);
+            res.status(500).send(error);
+          });
+      }
 
       // search came back successful
       else {
@@ -113,12 +111,26 @@ app.get(
     let startId = req.params.start,
       destinationId = req.params.end;
     let requestUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=place_id:${startId}&destination=place_id:${destinationId}&key=${API_KEY}`;
+    // send the request to the google maps directions api
     axios
       .get(requestUrl)
       .then((response) => {
-        let points = PolyLine.decode(
-          response.data.routes[0].overview_polyline.points
-        );
+        // let points = PolyLine.decode(
+        //   response.data.routes[0].overview_polyline.points
+        // );
+
+        // get the list of points
+        let points = [];
+        let legs = response.data.routes[0].legs;
+
+        for (var i = 0; i < legs.length; i++) {
+          let steps = legs[i].steps;
+          for (var j = 0; j < steps.length; j++) {
+            var stepPoints = PolyLine.decode(steps[j].polyline.points);
+            points.push(...stepPoints);
+          }
+        }
+
         let coords = points.map((point, index) => {
           return {
             latitude: point[0],
@@ -129,28 +141,29 @@ app.get(
         let distance = 0;
         let duration = 0;
 
-        let legs = response.data.routes[0].legs;
         for (var i = 0; i < legs.length; i++) {
           distance += legs[i].distance.value;
           duration += legs[i].duration.value;
         }
 
+        console.log("Calculated distance");
         let stops;
         if (req.params.calcOnGas) {
-            let mpg = req.params.mpg;
-            let fuelCap = req.params.fuelCap;
-            let fuelLeft = req.params.fuelLeft;
-            let distMiles = distance / 1609.344; // convert from meters to miles
+          let mpg = req.params.mpg;
+          let fuelCap = req.params.fuelCap;
+          let fuelLeft = req.params.fuelLeft;
+          let distMiles = distance / 1609.344; // convert from meters to miles
 
-            let initDist = mpg * (fuelLeft - 0.1 * fuelCap); // distance in miles that can be traveled before first stop
-            stops = 0;
+          let initDist = mpg * (fuelLeft - 0.1 * fuelCap); // distance in miles that can be traveled before first stop
+          stops = 0;
 
-            if (initDist < distMiles) {
-                stops = 1 + Math.floor((distMiles - initDist) / (mpg * (0.9 * fuelCap)));
-            }
+          if (initDist < distMiles) {
+            stops =
+              1 + Math.floor((distMiles - initDist) / (mpg * (0.9 * fuelCap)));
+          }
         } else {
-            // this doesn't actually work right now
-            stops = req.params.numStops;
+          // this doesn't actually work right now
+          stops = req.params.numStops;
         }
 
         let directions = {
@@ -159,6 +172,7 @@ app.get(
           duration: duration,
           stops: stops,
         };
+
         res.status(200).send(directions);
       })
       .catch((error) => {
