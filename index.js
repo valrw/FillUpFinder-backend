@@ -138,6 +138,7 @@ app.get(
           };
         });
 
+        // calculate total distance and total duration
         let distance = 0;
         let duration = 0;
 
@@ -146,9 +147,10 @@ app.get(
           duration += legs[i].duration.value;
         }
 
-        console.log("Calculated distance");
         let stops;
-        if (req.params.calcOnGas) {
+        let stopsList = [];
+
+        if (req.params.calcOnGas === "true") {
           let mpg = req.params.mpg;
           let fuelCap = req.params.fuelCap;
           let fuelLeft = req.params.fuelLeft;
@@ -161,16 +163,45 @@ app.get(
             stops =
               1 + Math.floor((distMiles - initDist) / (mpg * (0.9 * fuelCap)));
           }
-        } else {
-          // this doesn't actually work right now
-          stops = req.params.numStops;
         }
+        // When there is a set number of stops
+        else {
+          stops = parseInt(req.params.numStops);
+          const longToLat = 53 / 69.172;
+
+          // Calculate where the stops are
+
+          // First get total distance
+          let totalDist = 0;
+          for (var i = 1; i < coords.length; i++) {
+            totalDist += Math.abs(coords[i].latitude - coords[i - 1].latitude);
+            totalDist += Math.abs(
+              longToLat * (coords[i].longitude - coords[i - 1].longitude)
+            );
+          }
+
+          let goalDist = totalDist / (stops + 1);
+          let currDist = 0;
+          for (var i = 1; i < coords.length; i++) {
+            currDist += Math.abs(coords[i].latitude - coords[i - 1].latitude);
+            currDist += Math.abs(
+              longToLat * (coords[i].longitude - coords[i - 1].longitude)
+            );
+            if (currDist > goalDist) {
+              stopsList.push(coords[i]);
+              currDist = 0;
+            }
+          }
+        }
+
+        console.log(stopsList);
 
         let directions = {
           route: coords,
           distance: distance,
           duration: duration,
           stops: stops,
+          stopsList: stopsList,
         };
 
         res.status(200).send(directions);
