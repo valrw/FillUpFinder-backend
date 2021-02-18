@@ -1,12 +1,10 @@
-import express from "express";
 import axios from "axios";
-import API_KEY from "./api-key.js";
 import PolyLine from "@mapbox/polyline";
 
 const directionsResponse = (req, res) => {
   let startId = req.params.start,
     destinationId = req.params.end;
-  let requestUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=place_id:${startId}&destination=place_id:${destinationId}&key=${API_KEY}`;
+  let requestUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=place_id:${startId}&destination=place_id:${destinationId}&key=${process.env.MAPS_API_KEY}`;
   // send the request to the google maps directions api
   axios
     .get(requestUrl)
@@ -107,5 +105,10 @@ const directionsResponse = (req, res) => {
       res.status(500).send(error);
     });
 };
+
+// return up to a certain number of fuel stations along a route with prices
+const nearestStops = (route, prox, max) => {
+
+}
 
 export default directionsResponse;
