@@ -1,10 +1,8 @@
 import express from "express";
-import axios from "axios";
-import API_KEY from "./api-key.js";
-import PolyLine from "@mapbox/polyline";
 import directionsResponse from "./directions.js";
 import carResponse from "./car-search.js";
 
+require('dotenv').config();
 const app = express();
 
 app.get("/api/vehicle/:make/:model/:year", (req, res) => {
