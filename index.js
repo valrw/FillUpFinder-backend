@@ -6,9 +6,7 @@ import "dotenv/config.js";
 // require('dotenv').config();
 const app = express();
 
-app.get("/api/vehicle/:make/:model/:year", (req, res) => {
-  carResponse;
-});
+app.get("/api/vehicle/:make/:model/:year", carResponse);
 
 app.get(
   "/api/directions/:start/:end/:fuelLeft/:fuelCap/:mpg/:calcOnGas/:numStops?",

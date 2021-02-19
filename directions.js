@@ -57,8 +57,7 @@ const directionsResponse = async (req, res) => {
         stops = 0;
 
         if (initDist < distMiles) {
-          stops =
-            1 + Math.floor((distMiles - initDist) / fullTankDist);
+          stops = 1 + Math.floor((distMiles - initDist) / fullTankDist);
         }
 
         let distSinceStop = 0; // in meters
@@ -66,23 +65,30 @@ const directionsResponse = async (req, res) => {
         let step, stepDist;
 
         for (let i = 0; i < legs[0].steps.length; i++) {
-          step = legs[0].steps[i]
+          step = legs[0].steps[i];
           stepDist = step.distance.value;
 
           // TODO: handle stopping multiple times on one stretch
           // currently assuming the step distance is less than initDist and/or fullTankDist
 
           distSinceStop += stepDist;
-          if (distSinceStop >= (initDist * metersPerMile)) {
-            if (firstStop || distSinceStop >= (fullTankDist * metersPerMile)) {
+          if (distSinceStop >= initDist * metersPerMile) {
+            if (firstStop || distSinceStop >= fullTankDist * metersPerMile) {
               // should stop before reaching this point, so backtrack to the last step
               // find one gas station within 15000 meters (about 9 mi) of the last step
               let nearStop = await nearestStops(
-                legs[0].steps[i-1].end_location.lat, legs[0].steps[i-1].end_location.lng, 15000, 1
+                legs[0].steps[i - 1].end_location.lat,
+                legs[0].steps[i - 1].end_location.lng,
+                15000,
+                1
               );
 
-              if (nearStop[0].geometry != undefined) {
-                stopsList.push(nearStop);
+              if (
+                nearStop[0] != undefined &&
+                nearStop[0].geometry != undefined
+              ) {
+                let loc = nearStop[0].geometry.location;
+                stopsList.push({ latitude: loc.lat, longitude: loc.lng });
               } else {
                 console.log(nearStop[0]); // error?
               }
@@ -144,16 +150,19 @@ const directionsResponse = async (req, res) => {
 // fuel station is a JSON object with all of the data Google Maps returns for now
 // prox should be in meters
 const nearestStops = async (latitude, longitude, prox, max) => {
-  const requestUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${prox}&type=gas_station&key=${process.env.MAPS_API_KEY}`
-
+  const requestUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${prox}&type=gas_station&key=${process.env.MAPS_API_KEY}`;
+  console.log(requestUrl);
   try {
     const response = await axios.get(requestUrl);
-    return(response.data.results.slice(0, Math.min(response.data.results.length, max))); // the first [max] results
+    return response.data.results.slice(
+      0,
+      Math.min(response.data.results.length, max)
+    ); // the first [max] results
   } catch (error) {
-      console.log(error);
-      return([error]);
+    console.log(error);
+    return [error];
   }
-/*  axios
+  /*  axios
     .get(requestUrl)
     .then((response) => {
      console.log(response.data.results.slice(0, Math.min(response.data.results.length, max)));
@@ -163,6 +172,6 @@ const nearestStops = async (latitude, longitude, prox, max) => {
       console.log(error);
       return([error]);
     }) */
-}
+};
 
 export default directionsResponse;
