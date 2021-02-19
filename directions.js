@@ -128,8 +128,6 @@ const directionsResponse = async (req, res) => {
         }
       }
 
-      console.log(stopsList);
-
       let directions = {
         route: coords,
         distance: distance,
@@ -151,7 +149,6 @@ const directionsResponse = async (req, res) => {
 // prox should be in meters
 const nearestStops = async (latitude, longitude, prox, max) => {
   const requestUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${prox}&type=gas_station&key=${process.env.MAPS_API_KEY}`;
-  console.log(requestUrl);
   try {
     const response = await axios.get(requestUrl);
     return response.data.results.slice(
