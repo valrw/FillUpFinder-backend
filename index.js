@@ -1,8 +1,9 @@
 import express from "express";
 import directionsResponse from "./directions.js";
 import carResponse from "./car-search.js";
+import "dotenv/config.js";
 
-require('dotenv').config();
+// require('dotenv').config();
 const app = express();
 
 app.get("/api/vehicle/:make/:model/:year", (req, res) => {
