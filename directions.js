@@ -14,23 +14,8 @@ const directionsResponse = async (req, res) => {
       // );
 
       // get the list of points
-      let points = [];
       let legs = response.data.routes[0].legs;
-
-      for (var i = 0; i < legs.length; i++) {
-        let steps = legs[i].steps;
-        for (var j = 0; j < steps.length; j++) {
-          var stepPoints = PolyLine.decode(steps[j].polyline.points);
-          points.push(...stepPoints);
-        }
-      }
-
-      let coords = points.map((point, index) => {
-        return {
-          latitude: point[0],
-          longitude: point[1],
-        };
-      });
+      let coords = convertPolyline(legs);
 
       // calculate total distance and total duration
       let distance = 0;
@@ -128,11 +113,34 @@ const directionsResponse = async (req, res) => {
         }
       }
 
+      let finalUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=place_id:${startId}&destination=place_id:${destinationId}`;
+      if (stopsList.length > 0) finalUrl += "&waypoints=";
+      for (var i = 0; i < stopsList.length; i++) {
+        let stop = stopsList[i];
+        finalUrl += stop.latitude + "," + stop.longitude;
+        if (i < stopsList.length - 1) finalUrl += "|";
+      }
+      finalUrl += `&key=${process.env.MAPS_API_KEY}`;
+
+      try {
+        const response = await axios.get(finalUrl);
+
+        let legs = response.data.routes[0].legs;
+        for (var i = 0; i < legs.length; i++) {
+          distance += legs[i].distance.value;
+          duration += legs[i].duration.value;
+        }
+
+        coords = convertPolyline(legs);
+      } catch (error) {
+        console.log(error);
+      }
+
       let directions = {
         route: coords,
         distance: distance,
         duration: duration,
-        stops: stops,
+        stops: stopsList.length,
         stopsList: stopsList,
       };
 
@@ -170,5 +178,28 @@ const nearestStops = async (latitude, longitude, prox, max) => {
       return([error]);
     }) */
 };
+
+// Given a response from google maps, generate a polyline for the route
+// consisting of LatLng coordinates
+function convertPolyline(legs) {
+  let points = [];
+
+  for (var i = 0; i < legs.length; i++) {
+    let steps = legs[i].steps;
+    for (var j = 0; j < steps.length; j++) {
+      var stepPoints = PolyLine.decode(steps[j].polyline.points);
+      points.push(...stepPoints);
+    }
+  }
+
+  let coords = points.map((point, index) => {
+    return {
+      latitude: point[0],
+      longitude: point[1],
+    };
+  });
+
+  return coords;
+}
 
 export default directionsResponse;
