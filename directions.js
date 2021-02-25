@@ -128,7 +128,14 @@ const directionsResponse = async (req, res) => {
 
           if (nearStop[0] != undefined) {
             let loc = nearStop[0].geometry.location;
-            stopsList.push({ latitude: loc.lat, longitude: loc.lng });
+            stopsList.push({
+              latitude: loc.lat,
+              longitude: loc.lng,
+              name: nearStop[0].name,
+              open_now: nearStop[0].opening_hours.open_now,
+              photos: nearStop[0].photos,
+              vicinity: nearStop[0].vicinity,
+             });
           } else {
             console.log(nearStop[0]); // error?
           }
