@@ -101,6 +101,7 @@ const directionsResponse = async (req, res) => {
           );
         }
 
+        // Find a number of points spread evenly along the route
         let goalDist = totalDist / (stops + 1);
         let currDist = 0;
         let stopSearchList = [];
@@ -115,6 +116,7 @@ const directionsResponse = async (req, res) => {
           }
         }
 
+        // Search for stops near the points that were found
         for (var i = 0; i < stopSearchList.length; i++) {
           let currStop = stopSearchList[i];
           let nearStop = await nearestStops(
@@ -133,6 +135,7 @@ const directionsResponse = async (req, res) => {
         }
       }
 
+      // Search for a new route with the stops included
       let finalUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=place_id:${startId}&destination=place_id:${destinationId}`;
       if (stopsList.length > 0) finalUrl += "&waypoints=";
       for (var i = 0; i < stopsList.length; i++) {
