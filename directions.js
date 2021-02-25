@@ -1,6 +1,8 @@
 import axios from "axios";
 import PolyLine from "@mapbox/polyline";
 
+const searchRadius = 15000;
+
 const directionsResponse = async (req, res) => {
   let startId = req.params.start,
     destinationId = req.params.end;
@@ -64,7 +66,7 @@ const directionsResponse = async (req, res) => {
               let nearStop = await nearestStops(
                 legs[0].steps[i - 1].end_location.lat,
                 legs[0].steps[i - 1].end_location.lng,
-                15000,
+                searchRadius,
                 1
               );
 
@@ -101,14 +103,32 @@ const directionsResponse = async (req, res) => {
 
         let goalDist = totalDist / (stops + 1);
         let currDist = 0;
+        let stopSearchList = [];
         for (var i = 1; i < coords.length; i++) {
           currDist += Math.abs(coords[i].latitude - coords[i - 1].latitude);
           currDist += Math.abs(
             longToLat * (coords[i].longitude - coords[i - 1].longitude)
           );
           if (currDist > goalDist) {
-            stopsList.push(coords[i]);
+            stopSearchList.push(coords[i]);
             currDist = 0;
+          }
+        }
+
+        for (var i = 0; i < stopSearchList.length; i++) {
+          let currStop = stopSearchList[i];
+          let nearStop = await nearestStops(
+            currStop.latitude,
+            currStop.longitude,
+            searchRadius,
+            1
+          );
+
+          if (nearStop[0] != undefined) {
+            let loc = nearStop[0].geometry.location;
+            stopsList.push({ latitude: loc.lat, longitude: loc.lng });
+          } else {
+            console.log(nearStop[0]); // error?
           }
         }
       }
