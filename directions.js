@@ -136,7 +136,6 @@ const directionsResponse = async (req, res) => {
               vicinity: nearStop[0].vicinity,
             };
 
-            console.log(nearStop[0]);
             if (nearStop[0].opening_hours != undefined) {
               thisStop["open_now"] = nearStop[0].opening_hours.open_now;
             }
