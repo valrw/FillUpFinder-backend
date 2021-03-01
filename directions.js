@@ -1,7 +1,14 @@
 import axios from "axios";
 import PolyLine from "@mapbox/polyline";
+import GeoPoint from "geopoint";
 
 const searchRadius = 15000;
+const metersPerMile = 1609.344;
+
+/* Round to four decimal places */
+const roundFour = (num) => {
+  return (Math.round(num * 10000) / 10000);
+}
 
 const directionsResponse = async (req, res) => {
   let startId = req.params.start,
@@ -31,8 +38,6 @@ const directionsResponse = async (req, res) => {
       let stops;
       let stopsList = [];
 
-      const metersPerMile = 1609.344;
-
       if (req.params.calcOnGas === "true") {
         const mpg = req.params.mpg;
         const fuelCap = req.params.fuelCap;
@@ -51,36 +56,147 @@ const directionsResponse = async (req, res) => {
         let firstStop = true; // meaning we should account for how much gas is left initially
         let step, stepDist;
 
+        // keep track of place in polyline
+        let polyIndex = 0;
+
         for (let i = 0; i < legs[0].steps.length; i++) {
           step = legs[0].steps[i];
           stepDist = step.distance.value;
 
-          // TODO: handle stopping multiple times on one stretch
-          // currently assuming the step distance is less than initDist and/or fullTankDist
+          // handle stopping multiple times on one stretch
+          if (stepDist > initDist * metersPerMile &&
+            (firstStop || (stepDist > fullTankDist * metersPerMile))) {
+            
+            // for indexing future points on this step
+            while (roundFour(coords[polyIndex].latitude) != roundFour(step.start_location.lat) ||
+            roundFour(coords[polyIndex].longitude) != roundFour(step.start_location.lng)) {
+              polyIndex++;
+            }
+            let startPolyIndex = polyIndex;
 
-          distSinceStop += stepDist;
-          if (distSinceStop >= initDist * metersPerMile) {
-            if (firstStop || distSinceStop >= fullTankDist * metersPerMile) {
-              // should stop before reaching this point, so backtrack to the last step
-              // find one gas station within 15000 meters (about 9 mi) of the last step
-              let nearStop = await nearestStops(
-                legs[0].steps[i - 1].end_location.lat,
-                legs[0].steps[i - 1].end_location.lng,
-                searchRadius,
-                1
-              );
+            // for accuracy, add distance between all points on the step
+            let stepDistLeft = 0;
+            let pathDists = [];
+            let prevStartGeoPoint; // startGeoPoint for the last successful distance measurement
+            while (stepDistLeft < stepDist &&
+              (roundFour(coords[polyIndex].latitude) != roundFour(step.end_location.lat) ||
+              roundFour(coords[polyIndex].longitude) != roundFour(step.end_location.lng))) {
+              let startLatLng = coords[polyIndex];
+              let endLatLng = coords[polyIndex + 1];
+              let startGeoPoint = new GeoPoint(startLatLng.latitude, startLatLng.longitude);
+              let endGeoPoint = new GeoPoint(endLatLng.latitude, endLatLng.longitude);
 
-              if (
-                nearStop[0] != undefined &&
-                nearStop[0].geometry != undefined
-              ) {
-                let loc = nearStop[0].geometry.location;
-                stopsList.push({ latitude: loc.lat, longitude: loc.lng });
-              } else {
-                console.log(nearStop[0]); // error?
+              // in case the difference is too small
+              while (isNaN(startGeoPoint.distanceTo(endGeoPoint))) {
+                polyIndex++;
+
+                // found the end, stop incrementing and ignore this distance
+                if (roundFour(coords[polyIndex].latitude) == roundFour(step.end_location.lat) &&
+                roundFour(coords[polyIndex].longitude) == roundFour(step.end_location.lng)) {
+                  polyIndex--;
+                  pathDists[pathDists.length - 1] = prevStartGeoPoint.distanceTo(endGeoPoint);
+                }
+                
+                else {
+                  endLatLng = coords[polyIndex + 1];
+                  endGeoPoint = new GeoPoint(endLatLng.latitude, endLatLng.longitude);
+                }
               }
 
-              distSinceStop = stepDist;
+              stepDistLeft += startGeoPoint.distanceTo(endGeoPoint) * 1000; // convert from km to m
+              pathDists.push(startGeoPoint.distanceTo(endGeoPoint) * 1000); // distances between points on the path
+
+              prevStartGeoPoint = startGeoPoint;
+              polyIndex++;
+            }
+
+            // loop path coordinates until the step can be completed without stopping
+            let k = 0;
+            while (stepDistLeft > (initDist * metersPerMile - distSinceStop) &&
+              (firstStop || (stepDistLeft > (fullTankDist * metersPerMile - distSinceStop)))) {
+
+              distSinceStop += pathDists[k];
+              stepDistLeft -= pathDists[k];
+
+              if (distSinceStop >= initDist * metersPerMile &&
+                (firstStop || (distSinceStop >= fullTankDist * metersPerMile))) {
+                // should stop before this section of the path, so look for a stop near the beginning of the section
+                // find one gas station within 15000 meters (about 9 mi) of this point
+                let nearStop = await nearestStops(
+                  coords[startPolyIndex + k].latitude,
+                  coords[startPolyIndex + k].longitude,
+                  searchRadius,
+                  1
+                );
+
+                if (
+                  nearStop[0] != undefined &&
+                  nearStop[0].geometry != undefined
+                ) {
+                  let loc = nearStop[0].geometry.location;
+                  let thisStop = {
+                    latitude: loc.lat,
+                    longitude: loc.lng,
+                    name: nearStop[0].name,
+                    photos: nearStop[0].photos,
+                    vicinity: nearStop[0].vicinity,
+                  };
+
+                  if (nearStop[0].opening_hours != undefined) {
+                    thisStop["open_now"] = nearStop[0].opening_hours.open_now;
+                  }
+
+                  firstStop = false;
+                  distSinceStop = pathDists[k];
+                  stopsList.push(thisStop);
+
+                } else {
+                  console.log(nearStop[0]); // error?
+                  k = Math.min((k + 99), pathDists.length); // TEMPORARY??
+                }
+
+              } 
+              k++;
+            }
+          }
+
+          else {
+            distSinceStop += stepDist;
+            if (distSinceStop >= initDist * metersPerMile) {
+              if (firstStop || distSinceStop >= fullTankDist * metersPerMile) {
+                // should stop before reaching this point, so backtrack to the last step
+                // find one gas station within 15000 meters (about 9 mi) of the last step
+                let nearStop = await nearestStops(
+                  legs[0].steps[i - 1].end_location.lat,
+                  legs[0].steps[i - 1].end_location.lng,
+                  searchRadius,
+                  1
+                );
+
+                if (
+                  nearStop[0] != undefined &&
+                  nearStop[0].geometry != undefined
+                ) {
+                  let loc = nearStop[0].geometry.location;
+                  let thisStop = {
+                    latitude: loc.lat,
+                    longitude: loc.lng,
+                    name: nearStop[0].name,
+                    photos: nearStop[0].photos,
+                    vicinity: nearStop[0].vicinity,
+                  };
+
+                  if (nearStop[0].opening_hours != undefined) {
+                    thisStop["open_now"] = nearStop[0].opening_hours.open_now;
+                  }
+                  firstStop = false;
+                  stopsList.push(thisStop);
+                } else {
+                  console.log(nearStop[0]); // error?
+                }
+
+                distSinceStop = stepDist;
+              }
             }
           }
         }
@@ -126,7 +242,8 @@ const directionsResponse = async (req, res) => {
             1
           );
 
-          if (nearStop[0] != undefined) {
+          if (nearStop[0] != undefined &&
+              nearStop[0].geometry != undefined) {
             let loc = nearStop[0].geometry.location;
             let thisStop = {
               latitude: loc.lat,
@@ -202,16 +319,6 @@ const nearestStops = async (latitude, longitude, prox, max) => {
     console.log(error);
     return [error];
   }
-  /*  axios
-    .get(requestUrl)
-    .then((response) => {
-     console.log(response.data.results.slice(0, Math.min(response.data.results.length, max)));
-      return(response.data.results.slice(0, Math.min(response.data.results.length, max)));
-    })
-    .catch((error) => {
-      console.log(error);
-      return([error]);
-    }) */
 };
 
 // Given a response from google maps, generate a polyline for the route
