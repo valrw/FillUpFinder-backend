@@ -171,12 +171,15 @@ const directionsResponse = async (req, res) => {
         console.log(error);
       }
 
+      let zoomBounds = getZoomBounds(response.data.routes[0].bounds);
+
       let directions = {
         route: coords,
         distance: distance,
         duration: duration,
         stops: stopsList.length,
         stopsList: stopsList,
+        zoomBounds: zoomBounds,
       };
 
       res.status(200).send(directions);
@@ -235,6 +238,24 @@ function convertPolyline(legs) {
   });
 
   return coords;
+}
+
+function getZoomBounds(bounds) {
+  const deltaMultiplier = 1.3; // How much to zoom out
+
+  let avgLat = (bounds.northeast.lat + bounds.southwest.lat) / 2;
+  let avgLong = (bounds.northeast.lng + bounds.southwest.lng) / 2;
+
+  let latDelta = bounds.northeast.lat - bounds.southwest.lat;
+  let lngDelta = bounds.northeast.lng - bounds.southwest.lng;
+
+  // Ok to set both latDelta and lngDelta, since map will use largest one
+  return {
+    latitude: avgLat,
+    longitude: avgLong,
+    latitudeDelta: latDelta * deltaMultiplier,
+    longitudeDelta: lngDelta * deltaMultiplier,
+  };
 }
 
 export default directionsResponse;
