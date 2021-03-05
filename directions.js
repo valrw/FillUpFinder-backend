@@ -1,6 +1,7 @@
 import axios from "axios";
 import PolyLine from "@mapbox/polyline";
-import GeoPoint from "geopoint";
+import haversine from "haversine-distance";
+// import GeoPoint from "geopoint";
 
 const searchRadius = 15000;
 const metersPerMile = 1609.344;
@@ -75,38 +76,18 @@ const directionsResponse = async (req, res) => {
             let startPolyIndex = polyIndex;
 
             // for accuracy, add distance between all points on the step
+            // stepDistLeft tends to be a bit larger than stepDist
             let stepDistLeft = 0;
             let pathDists = [];
-            let prevStartGeoPoint; // startGeoPoint for the last successful distance measurement
             while (stepDistLeft < stepDist &&
               (roundFour(coords[polyIndex].latitude) != roundFour(step.end_location.lat) ||
               roundFour(coords[polyIndex].longitude) != roundFour(step.end_location.lng))) {
               let startLatLng = coords[polyIndex];
               let endLatLng = coords[polyIndex + 1];
-              let startGeoPoint = new GeoPoint(startLatLng.latitude, startLatLng.longitude);
-              let endGeoPoint = new GeoPoint(endLatLng.latitude, endLatLng.longitude);
 
-              // in case the difference is too small
-              while (isNaN(startGeoPoint.distanceTo(endGeoPoint))) {
-                polyIndex++;
+              stepDistLeft += haversine(startLatLng, endLatLng);
+              pathDists.push(haversine(startLatLng, endLatLng));
 
-                // found the end, stop incrementing and ignore this distance
-                if (roundFour(coords[polyIndex].latitude) == roundFour(step.end_location.lat) &&
-                roundFour(coords[polyIndex].longitude) == roundFour(step.end_location.lng)) {
-                  polyIndex--;
-                  pathDists[pathDists.length - 1] = prevStartGeoPoint.distanceTo(endGeoPoint);
-                }
-                
-                else {
-                  endLatLng = coords[polyIndex + 1];
-                  endGeoPoint = new GeoPoint(endLatLng.latitude, endLatLng.longitude);
-                }
-              }
-
-              stepDistLeft += startGeoPoint.distanceTo(endGeoPoint) * 1000; // convert from km to m
-              pathDists.push(startGeoPoint.distanceTo(endGeoPoint) * 1000); // distances between points on the path
-
-              prevStartGeoPoint = startGeoPoint;
               polyIndex++;
             }
 
@@ -147,17 +128,20 @@ const directionsResponse = async (req, res) => {
                   }
 
                   firstStop = false;
-                  distSinceStop = pathDists[k];
                   stopsList.push(thisStop);
+                  distSinceStop = pathDists[k];
 
                 } else {
                   console.log(nearStop[0]); // error?
-                  k = Math.min((k + 99), pathDists.length); // TEMPORARY??
+                  k = Math.min((k + 99), pathDists.length); // temporary? causes slight inaccuracy bc this dist isn't added
                 }
 
               } 
               k++;
             }
+
+            // account for distance traveled since the last stop on this stretch
+            distSinceStop += pathDists.slice(k).reduce((x, y) => x + y);
           }
 
           else {
