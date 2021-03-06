@@ -6,9 +6,9 @@ import haversine from "haversine-distance";
 const searchRadius = 15000;
 const metersPerMile = 1609.344;
 
-/* Round to four decimal places */
-const roundFour = (num) => {
-  return (Math.round(num * 10000) / 10000);
+/* Round to three decimal places */
+const roundThree = (num) => {
+  return (Math.round(num * 1000) / 1000);
 }
 
 const directionsResponse = async (req, res) => {
@@ -64,15 +64,19 @@ const directionsResponse = async (req, res) => {
           step = legs[0].steps[i];
           stepDist = step.distance.value;
 
-          // handle stopping multiple times on one stretch
-          if (stepDist > initDist * metersPerMile &&
-            (firstStop || (stepDist > fullTankDist * metersPerMile))) {
-            
+          // handle stopping in the middle of a step longer than full tank distance
+          // also handle the case where fuel will run out but tank is more than 30% full
+          if ((stepDist > initDist * metersPerMile && firstStop) ||
+              stepDist > fullTankDist * metersPerMile ||
+              (distSinceStop + stepDist >= initDist * metersPerMile &&
+                distSinceStop / initDist > 0.3 &&
+                (firstStop ||
+                  (distSinceStop + stepDist >= fullTankDist * metersPerMile &&
+                  distSinceStop / fullTankDist > 0.3)))) {            
             // for indexing future points on this step
-            while (roundFour(coords[polyIndex].latitude) != roundFour(step.start_location.lat) ||
-            roundFour(coords[polyIndex].longitude) != roundFour(step.start_location.lng)) {
+            while (roundThree(coords[polyIndex].latitude) != roundThree(step.start_location.lat) ||
+            roundThree(coords[polyIndex].longitude) != roundThree(step.start_location.lng)) {
               polyIndex++;
-            }
             let startPolyIndex = polyIndex;
 
             // for accuracy, add distance between all points on the step
@@ -80,8 +84,8 @@ const directionsResponse = async (req, res) => {
             let stepDistLeft = 0;
             let pathDists = [];
             while (stepDistLeft < stepDist &&
-              (roundFour(coords[polyIndex].latitude) != roundFour(step.end_location.lat) ||
-              roundFour(coords[polyIndex].longitude) != roundFour(step.end_location.lng))) {
+              (roundThree(coords[polyIndex].latitude) != roundThree(step.end_location.lat) ||
+              roundThree(coords[polyIndex].longitude) != roundThree(step.end_location.lng))) {
               let startLatLng = coords[polyIndex];
               let endLatLng = coords[polyIndex + 1];
 
