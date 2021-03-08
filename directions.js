@@ -77,6 +77,7 @@ const directionsResponse = async (req, res) => {
             while (roundThree(coords[polyIndex].latitude) != roundThree(step.start_location.lat) ||
             roundThree(coords[polyIndex].longitude) != roundThree(step.start_location.lng)) {
               polyIndex++;
+            }
             let startPolyIndex = polyIndex;
 
             // for accuracy, add distance between all points on the step
@@ -147,6 +148,7 @@ const directionsResponse = async (req, res) => {
             // account for distance traveled since the last stop on this stretch
             distSinceStop += pathDists.slice(k).reduce((x, y) => x + y);
           }
+          
 
           else {
             distSinceStop += stepDist;
