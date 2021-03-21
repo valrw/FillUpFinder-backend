@@ -6,11 +6,6 @@ import haversine from "haversine-distance";
 const searchRadius = 15000;
 const metersPerMile = 1609.344;
 
-/* Round to three decimal places */
-const roundThree = (num) => {
-  return Math.round(num * 1000) / 1000;
-};
-
 const directionsResponse = async (req, res) => {
   let startId = req.params.start,
     destinationId = req.params.end;
@@ -56,51 +51,55 @@ const directionsResponse = async (req, res) => {
         let distSinceStop = 0; // in meters
         let firstStop = true; // meaning we should account for how much gas is left initially
         let step, stepDist;
+        let steps = legs[0];
 
-        let lastStopIndex = 0;
+        let lastStop = [
+          steps[0].start_location.lat,
+          steps[0].start_location.lng,
+        ];
+        let lastStopIndex = { i: 0, k: 0 };
+        let pointIndex = 0;
 
         // keep track of place in polyline
-        let polyIndex = 0;
-
-        for (let i = 0; i < legs[0].steps.length; i++) {
-          step = legs[0].steps[i];
+        let i = 0;
+        while (i < steps.length) {
+          step = steps[i];
           stepDist = step.distance.value;
+
+          let currPoints = PolyLine.decode(step.polyline.points);
+          currPoints = currPoints.map((point) => {
+            return {
+              latitude: point[0],
+              longitude: point[1],
+            };
+          });
 
           // handle stopping in the middle of a step longer than full tank distance
           // also handle the case where fuel will run out but tank is more than 30% full
-          if (
-            (stepDist > initDist * metersPerMile && firstStop) ||
-            stepDist > fullTankDist * metersPerMile ||
-            (distSinceStop + stepDist >= initDist * metersPerMile &&
-              distSinceStop / initDist > 0.3 &&
-              (firstStop ||
-                (distSinceStop + stepDist >= fullTankDist * metersPerMile &&
-                  distSinceStop / fullTankDist > 0.3)))
-          ) {
-            // for indexing future points on this step
-            while (
-              roundThree(coords[polyIndex].latitude) !=
-                roundThree(step.start_location.lat) ||
-              roundThree(coords[polyIndex].longitude) !=
-                roundThree(step.start_location.lng)
-            ) {
-              polyIndex++;
-            }
-            let startPolyIndex = polyIndex;
+          const tankLimit = 0.3;
 
+          let distAfterStop = distSinceStop + stepDist;
+          let tankLeft = 1 - distSinceStop / fullTankDist;
+          let distCapacity = fullTankDist * metersPerMile;
+          if (firstStop) {
+            tankLeft = initDist / fullTankDist - distSinceStop / fullTankDist;
+            distCapacity = initDist * metersPerMile;
+          }
+
+          if (
+            (distAfterStop >= distCapacity && tankLeft > tankLimit) ||
+            stepDist >= distCapacity ||
+            pointIndex != 0
+          ) {
             // for accuracy, add distance between all points on the step
             // stepDistLeft tends to be a bit larger than stepDist
             let stepDistLeft = 0;
             let pathDists = [];
-            while (
-              stepDistLeft < stepDist &&
-              (roundThree(coords[polyIndex].latitude) !=
-                roundThree(step.end_location.lat) ||
-                roundThree(coords[polyIndex].longitude) !=
-                  roundThree(step.end_location.lng))
-            ) {
-              let startLatLng = coords[polyIndex];
-              let endLatLng = coords[polyIndex + 1];
+
+            let polyIndex = 0;
+            while (stepDistLeft < stepDist && polyIndex < currPoints.length) {
+              let startLatLng = currPoints[polyIndex];
+              let endLatLng = currPoints[polyIndex + 1];
 
               stepDistLeft += haversine(startLatLng, endLatLng);
               pathDists.push(haversine(startLatLng, endLatLng));
@@ -108,25 +107,22 @@ const directionsResponse = async (req, res) => {
               polyIndex++;
             }
 
+            // if we are backtracking, set k to backtrack point
+            let k = pointIndex;
+            pointIndex = 0;
+            let backtracked = false;
+
             // loop path coordinates until the step can be completed without stopping
-            let k = 0;
-            while (
-              stepDistLeft > initDist * metersPerMile - distSinceStop &&
-              (firstStop ||
-                stepDistLeft > fullTankDist * metersPerMile - distSinceStop)
-            ) {
+            while (stepDistLeft >= distCapacity - distSinceStop) {
               distSinceStop += pathDists[k];
               stepDistLeft -= pathDists[k];
 
-              if (
-                distSinceStop >= initDist * metersPerMile &&
-                (firstStop || distSinceStop >= fullTankDist * metersPerMile)
-              ) {
+              if (distSinceStop >= distCapacity) {
                 // should stop before this section of the path, so look for a stop near the beginning of the section
                 // find one gas station within 15000 meters (about 9 mi) of this point
                 let nearStop = await nearestStops(
-                  coords[startPolyIndex + k].latitude,
-                  coords[startPolyIndex + k].longitude,
+                  currPoints[k].latitude,
+                  currPoints[k].longitude,
                   searchRadius,
                   1
                 );
@@ -151,69 +147,102 @@ const directionsResponse = async (req, res) => {
                   firstStop = false;
                   stopsList.push(thisStop);
                   distSinceStop = pathDists[k];
-                  lastStopIndex = i;
+                  lastStop = [thisStop.latitude, thisStop.longitude];
+                  lastStopIndex = { i: i, k: k };
                 } else {
-                  console.log(nearStop[0]); // error?
-                  k = Math.min(k + 99, pathDists.length); // temporary? causes slight inaccuracy bc this dist isn't added
+                  let backtrackResult = backtrack(
+                    steps,
+                    i,
+                    k,
+                    lastStop,
+                    lastStopIndex
+                  );
+                  // if we backtracked past last stop, return error
+                  if (backtrackResult == -1) {
+                    console.log("ERROR");
+                    return "ERROR";
+                  }
+                  // set i, k, to new point that we backtracked to
+                  i = backtrackResult.i;
+                  pointIndex = backtrackResult.k;
+                  // set distSinceStop to max to ensure we stop at point
+                  distSinceStop = distCapacity + 1;
+
+                  // if we backtracked to the end of a step, go to start of next step
+                  if (pointIndex == steps[i].points.length - 1) {
+                    i++;
+                    pointIndex = 0;
+                  }
+                  backtracked = true;
+                  break;
                 }
               }
               k++;
             }
 
             // account for distance traveled since the last stop on this stretch
-            distSinceStop += pathDists.slice(k).reduce((x, y) => x + y);
+            if (backtracked) continue;
+            let currDists = pathDists.slice(k);
+            for (let i = 0; i < currDists; i++) {
+              distSinceStop += pathDists[i];
+            }
           } else {
             distSinceStop += stepDist;
-            if (distSinceStop >= initDist * metersPerMile) {
-              if (firstStop || distSinceStop >= fullTankDist * metersPerMile) {
-                // should stop before reaching this point, so backtrack to the last step
-                // find one gas station within 15000 meters (about 9 mi) of the last step
-                let nearStop = await nearestStops(
-                  legs[0].steps[i - 1].end_location.lat,
-                  legs[0].steps[i - 1].end_location.lng,
-                  searchRadius,
-                  1
-                );
+            if (distSinceStop >= distCapacity) {
+              // should stop before reaching this point, so backtrack to the last step
+              // find one gas station within 15000 meters (about 9 mi) of the last step
+              let nearStop = await nearestStops(
+                steps[i - 1].end_location.lat,
+                steps[i - 1].end_location.lng,
+                searchRadius,
+                1
+              );
 
-                if (
-                  nearStop[0] != undefined &&
-                  nearStop[0].geometry != undefined
-                ) {
-                  let loc = nearStop[0].geometry.location;
-                  let thisStop = {
-                    latitude: loc.lat,
-                    longitude: loc.lng,
-                    name: nearStop[0].name,
-                    photos: nearStop[0].photos,
-                    vicinity: nearStop[0].vicinity,
-                  };
+              if (
+                nearStop[0] != undefined &&
+                nearStop[0].geometry != undefined
+              ) {
+                let loc = nearStop[0].geometry.location;
+                let thisStop = {
+                  latitude: loc.lat,
+                  longitude: loc.lng,
+                  name: nearStop[0].name,
+                  photos: nearStop[0].photos,
+                  vicinity: nearStop[0].vicinity,
+                };
 
-                  if (nearStop[0].opening_hours != undefined) {
-                    thisStop["open_now"] = nearStop[0].opening_hours.open_now;
-                  }
-                  firstStop = false;
-                  stopsList.push(thisStop);
-                  lastStopIndex = i;
-                } else {
-                  console.log(nearStop[0]); // error?
-
-                  // Backtrack multiple steps until a gas station is found
-                  let j = i - 1;
-                  while (j > lastStopIndex + 1 && nearStop[0] == undefined) {
-                    nearStop = await nearestStops(
-                      legs[0].steps[j - 1].end_location.lat,
-                      legs[0].steps[j - 1].end_location.lng,
-                      searchRadius,
-                      1
-                    );
-                    j = j - 1;
-                  }
+                if (nearStop[0].opening_hours != undefined) {
+                  thisStop["open_now"] = nearStop[0].opening_hours.open_now;
                 }
-
-                distSinceStop = stepDist;
+                firstStop = false;
+                stopsList.push(thisStop);
+                lastStop = [thisStop.latitude, thisStop.longitude];
+                lastStopIndex = { i: i, k: 0 };
+              } else {
+                let backtrackResult = backtrack(
+                  steps,
+                  i,
+                  0,
+                  lastStop,
+                  lastStopIndex
+                );
+                // if we backtracked past last stop, return error
+                if (backtrackResult == -1) {
+                  console.log("ERROR");
+                  return "ERROR";
+                }
+                // set i, k, to new point that we backtracked to
+                i = backtrackResult.i;
+                pointIndex = backtrackResult.k;
+                // set distSinceStop to max to ensure we stop at point
+                distSinceStop = distCapacity + 1;
+                continue;
               }
+
+              distSinceStop = stepDist;
             }
           }
+          i++;
         }
       }
       // When there is a set number of stops
@@ -391,6 +420,62 @@ function getZoomBounds(bounds) {
     latitudeDelta: latDelta * deltaMultiplier,
     longitudeDelta: lngDelta * deltaMultiplier,
   };
+}
+
+function backtrack(steps, index, stepIndex, lastStop, lastStopIndex) {
+  const backDistance = 30000;
+  const backtrackLimit = 50000;
+
+  let i = index;
+  let backtrack = 0;
+  let k = 0;
+
+  // if we are backtracking in the middle of a step, go back through the step
+  if (stepIndex != 0) {
+    k = stepIndex;
+    let points = PolyLine.decode(steps[i].polyline.points);
+    let distances = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      distances.push(haversine(points[i], points[i + 1]));
+    }
+    while (backtrack < backDistance && k >= 1) {
+      k--;
+      backtrack += distances[k];
+    }
+  }
+
+  // backtrack through multiple steps
+  while (backtrack < backDistance && i >= 1) {
+    i -= 1;
+    backtrack += steps[i].distance.value;
+    // if the step we just took is large, backtrack through the step
+    if (backtrack > backDistance * 1.5) {
+      backtrack -= steps[i].distance.value;
+      let points = PolyLine.decode(steps[i].polyline.points);
+      let distances = [];
+      for (let i = 0; i < points.length - 1; i++) {
+        distances.push(haversine(points[i], points[i + 1]));
+      }
+      k = points.length - 1;
+      while (backtrack < backDistance) {
+        k--;
+        backtrack += distances[k];
+      }
+    }
+  }
+  // get the point we backtracked to
+  let backPointsList = PolyLine.decode(steps[i].polyline.points);
+  let backtrackPoint = backPointsList[k];
+  // Ensure that the point is not too close to or behind the last stop
+  if (
+    haversine(lastStop, backtrackPoint) < backtrackLimit ||
+    lastStopIndex.i > index ||
+    (lastStopIndex.i == index && lastStopIndex.k > stepIndex)
+  ) {
+    return -1;
+  }
+  // return index of the point in the steps:points array
+  return { i: i, k: k };
 }
 
 export default directionsResponse;
