@@ -51,7 +51,7 @@ const directionsResponse = async (req, res) => {
         let distSinceStop = 0; // in meters
         let firstStop = true; // meaning we should account for how much gas is left initially
         let step, stepDist;
-        let steps = legs[0];
+        let steps = legs[0].steps;
 
         let lastStop = [
           steps[0].start_location.lat,
@@ -113,7 +113,10 @@ const directionsResponse = async (req, res) => {
             let backtracked = false;
 
             // loop path coordinates until the step can be completed without stopping
-            while (stepDistLeft >= distCapacity - distSinceStop) {
+            while (
+              stepDistLeft >= distCapacity - distSinceStop &&
+              k < pathDists.length
+            ) {
               distSinceStop += pathDists[k];
               stepDistLeft -= pathDists[k];
 
@@ -166,10 +169,11 @@ const directionsResponse = async (req, res) => {
                   i = backtrackResult.i;
                   pointIndex = backtrackResult.k;
                   // set distSinceStop to max to ensure we stop at point
-                  distSinceStop = distCapacity + 1;
+                  distSinceStop = fullTankDist * metersPerMile + 1;
 
                   // if we backtracked to the end of a step, go to start of next step
-                  if (pointIndex == steps[i].points.length - 1) {
+                  let currPoints = PolyLine.decode(steps[i].polyline.points);
+                  if (pointIndex == currPoints.length - 1) {
                     i++;
                     pointIndex = 0;
                   }
@@ -235,7 +239,7 @@ const directionsResponse = async (req, res) => {
                 i = backtrackResult.i;
                 pointIndex = backtrackResult.k;
                 // set distSinceStop to max to ensure we stop at point
-                distSinceStop = distCapacity + 1;
+                distSinceStop = fullTankDist * metersPerMile + 1;
                 continue;
               }
 
