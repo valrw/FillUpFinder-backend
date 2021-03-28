@@ -134,18 +134,7 @@ const directionsResponse = async (req, res) => {
                   nearStop[0] != undefined &&
                   nearStop[0].geometry != undefined
                 ) {
-                  let loc = nearStop[0].geometry.location;
-                  let thisStop = {
-                    latitude: loc.lat,
-                    longitude: loc.lng,
-                    name: nearStop[0].name,
-                    photos: nearStop[0].photos,
-                    vicinity: nearStop[0].vicinity,
-                  };
-
-                  if (nearStop[0].opening_hours != undefined) {
-                    thisStop["open_now"] = nearStop[0].opening_hours.open_now;
-                  }
+                  var thisStop = getStop(nearStop[0]);
 
                   firstStop = false;
                   stopsList.push(thisStop);
@@ -206,18 +195,8 @@ const directionsResponse = async (req, res) => {
                 nearStop[0] != undefined &&
                 nearStop[0].geometry != undefined
               ) {
-                let loc = nearStop[0].geometry.location;
-                let thisStop = {
-                  latitude: loc.lat,
-                  longitude: loc.lng,
-                  name: nearStop[0].name,
-                  photos: nearStop[0].photos,
-                  vicinity: nearStop[0].vicinity,
-                };
+                var thisStop = getStop(nearStop[0]);
 
-                if (nearStop[0].opening_hours != undefined) {
-                  thisStop["open_now"] = nearStop[0].opening_hours.open_now;
-                }
                 firstStop = false;
                 stopsList.push(thisStop);
                 lastStop = [thisStop.latitude, thisStop.longitude];
@@ -303,19 +282,7 @@ const directionsResponse = async (req, res) => {
           }
 
           if (nearStop[0] != undefined && nearStop[0].geometry != undefined) {
-            let loc = nearStop[0].geometry.location;
-            let thisStop = {
-              latitude: loc.lat,
-              longitude: loc.lng,
-              name: nearStop[0].name,
-              photos: nearStop[0].photos,
-              vicinity: nearStop[0].vicinity,
-            };
-
-            if (nearStop[0].opening_hours != undefined) {
-              thisStop["open_now"] = nearStop[0].opening_hours.open_now;
-            }
-
+            var thisStop = getStop(nearStop[0]);
             stopsList.push(thisStop);
           } else {
             res.status(500).send({ message: "No gas stations found" });
@@ -384,6 +351,31 @@ const nearestStops = async (latitude, longitude, prox, max) => {
     return [error];
   }
 };
+
+function getStop(nearStop) {
+  let loc = nearStop.geometry.location;
+  let thisStop = {
+    latitude: loc.lat,
+    longitude: loc.lng,
+    name: nearStop.name,
+    photos: nearStop.photos,
+    vicinity: nearStop.vicinity,
+  };
+
+  if (nearStop.opening_hours != undefined) {
+    thisStop["open_now"] = nearStop.opening_hours.open_now;
+  }
+
+  if (
+    nearStop.rating != undefined &&
+    nearStop.user_ratings_total != undefined
+  ) {
+    thisStop["rating"] = nearStop.rating;
+    thisStop["num_ratings"] = nearStop.user_ratings_total;
+  }
+
+  return thisStop;
+}
 
 // Given a response from google maps, generate a polyline for the route
 // consisting of LatLng coordinates
