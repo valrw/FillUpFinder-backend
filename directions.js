@@ -22,7 +22,7 @@ const directionsResponse = async (req, res) => {
 
       // get the list of points
       const legs = response.data.routes[0].legs;
-      let coords = convertPolyline(legs);
+      let coords = convertPolyline(legs)[0].coords;
 
       // calculate total distance and total duration
       let distance = 0;
@@ -62,7 +62,6 @@ const directionsResponse = async (req, res) => {
       res.status(200).send(directions);
     })
     .catch((error) => {
-      //console.log(error);
       res.status(500).send(error);
     });
 };
@@ -358,32 +357,26 @@ const updateRoute = async (
   }
   finalUrl += `&key=${process.env.MAPS_API_KEY}`;
 
-  let coords = prevCoords;
-  let distance = prevDist;
-  let duration = prevDuration;
+  let segments = prevCoords;
   let zoomBounds = prevBounds;
 
   try {
     const response = await axios.get(finalUrl);
-
     const legs = response.data.routes[0].legs;
-    distance = 0;
-    duration = 0;
+    segments = convertPolyline(legs);
+
     for (var i = 0; i < legs.length; i++) {
-      distance += legs[i].distance.value;
-      duration += legs[i].duration.value;
+      segments[i]["distance"] = legs[i].distance.value;
+      segments[i]["duration"] = legs[i].duration.value;
     }
 
-    coords = convertPolyline(legs);
     zoomBounds = getZoomBounds(response.data.routes[0].bounds);
   } catch (error) {
-    //console.log(error);
+    console.log(error);
   }
 
   let directions = {
-    route: coords,
-    distance: distance,
-    duration: duration,
+    route: segments,
     stops: stopsList.length,
     stopsList: stopsList,
     zoomBounds: zoomBounds,
@@ -438,24 +431,27 @@ function getStop(nearStop) {
 // Given a response from google maps, generate a polyline for the route
 // consisting of LatLng coordinates
 function convertPolyline(legs) {
-  let points = [];
+  let segments = [];
 
   for (var i = 0; i < legs.length; i++) {
+    let points = [];
     let steps = legs[i].steps;
     for (var j = 0; j < steps.length; j++) {
       var stepPoints = PolyLine.decode(steps[j].polyline.points);
       points.push(...stepPoints);
     }
+
+    let coords = points.map((point, index) => {
+      return {
+        latitude: point[0],
+        longitude: point[1],
+      };
+    });
+    var leg = { coords: coords };
+    segments.push(leg);
   }
 
-  let coords = points.map((point, index) => {
-    return {
-      latitude: point[0],
-      longitude: point[1],
-    };
-  });
-
-  return coords;
+  return segments;
 }
 
 function getZoomBounds(bounds) {
