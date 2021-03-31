@@ -5,6 +5,8 @@ import haversine from "haversine-distance";
 
 const searchRadius = 15000;
 const metersPerMile = 1609.344;
+const backDistance = 30000;
+const backtrackLimit = 50000;
 
 const directionsResponse = async (req, res) => {
   let startId = req.params.start,
@@ -26,7 +28,7 @@ const directionsResponse = async (req, res) => {
       let distance = 0;
       let duration = 0;
       let steps = [];
-      
+
       for (var i = 0; i < legs.length; i++) {
         distance += legs[i].distance.value;
         duration += legs[i].duration.value;
@@ -35,18 +37,27 @@ const directionsResponse = async (req, res) => {
 
       let stopsList = [];
       if (req.params.calcOnGas == "true") {
-        stopsList = await getStopsOnGas(distance,
-                                        steps,
-                                        req.params.mpg,
-                                        req.params.fuelCap,
-                                        req.params.fuelLeft);
+        stopsList = await getStopsOnGas(
+          distance,
+          steps,
+          req.params.mpg,
+          req.params.fuelCap,
+          req.params.fuelLeft
+        );
       } else {
         stopsList = await getSetNumberStops(coords, req.params.numStops);
       }
 
       let zoomBounds = getZoomBounds(response.data.routes[0].bounds);
-      const directions = await updateRoute(startId, destinationId, stopsList, coords, distance, duration, zoomBounds);
-      console.log(directions.stopsList);
+      const directions = await updateRoute(
+        startId,
+        destinationId,
+        stopsList,
+        coords,
+        distance,
+        duration,
+        zoomBounds
+      );
 
       res.status(200).send(directions);
     })
@@ -58,13 +69,15 @@ const directionsResponse = async (req, res) => {
 
 // add stops to route
 // returns a JSON object with a new route including the stops
-const getStopsOnGas = async (distance,
-                             steps, // array of JSON objects for each step as returned by Maps API
-                             mpg,
-                             fuelCap,
-                             fuelLeft,
-                             stopsFunction = nearestStops, // for finding stops near a point
-                             distFunction = haversine) => {
+const getStopsOnGas = async (
+  distance,
+  steps, // array of JSON objects for each step as returned by Maps API
+  mpg,
+  fuelCap,
+  fuelLeft,
+  stopsFunction = nearestStops, // for finding stops near a point
+  distFunction = haversine
+) => {
   let stops = 0;
   let stopsList = [];
 
@@ -81,11 +94,7 @@ const getStopsOnGas = async (distance,
   let firstStop = true; // meaning we should account for how much gas is left initially
   let step, stepDist;
 
-  console.log(steps[0]);
-  let lastStop = [
-    steps[0].start_location.lat,
-    steps[0].start_location.lng,
-  ];
+  let lastStop = [steps[0].start_location.lat, steps[0].start_location.lng];
   let lastStopIndex = { i: 0, k: 0 };
   let pointIndex = 0;
 
@@ -140,9 +149,6 @@ const getStopsOnGas = async (distance,
       pointIndex = 0;
       let backtracked = false;
 
-      const backDistance = 30000;
-      const backtrackLimit = 50000;
-
       // loop path coordinates until the step can be completed without stopping
       while (
         stepDistLeft >= distCapacity - distSinceStop &&
@@ -161,10 +167,7 @@ const getStopsOnGas = async (distance,
             1
           );
 
-          if (
-            nearStop[0] != undefined &&
-            nearStop[0].geometry != undefined
-          ) {
+          if (nearStop[0] != undefined && nearStop[0].geometry != undefined) {
             var thisStop = getStop(nearStop[0]);
 
             firstStop = false;
@@ -178,7 +181,10 @@ const getStopsOnGas = async (distance,
               i,
               k,
               lastStop,
-              lastStopIndex
+              lastStopIndex,
+              backDistance,
+              backtrackLimit,
+              distFunction
             );
             // if we backtracked past last stop, return error
             if (backtrackResult == -1) {
@@ -222,10 +228,7 @@ const getStopsOnGas = async (distance,
           1
         );
 
-        if (
-          nearStop[0] != undefined &&
-          nearStop[0].geometry != undefined
-        ) {
+        if (nearStop[0] != undefined && nearStop[0].geometry != undefined) {
           var thisStop = getStop(nearStop[0]);
           firstStop = false;
           stopsList.push(thisStop);
@@ -262,12 +265,14 @@ const getStopsOnGas = async (distance,
   }
 
   return stopsList;
-}
+};
 
-const getSetNumberStops = async(coords, // array of JSON objects for each step as returned by Maps API
-                                numStops,
-                                stopsFunction = nearestStops,
-                                distFunction = haversine) => {
+const getSetNumberStops = async (
+  coords, // array of JSON objects for each step as returned by Maps API
+  numStops,
+  stopsFunction = nearestStops,
+  distFunction = haversine
+) => {
   const stops = parseInt(numStops);
   const longToLat = 53 / 69.172;
   const latToMeters = 110567;
@@ -316,7 +321,7 @@ const getSetNumberStops = async(coords, // array of JSON objects for each step a
         currStop.latitude,
         currStop.longitude,
         searchRadius * currMult,
-        1,
+        1
       );
       currMult *= multIncrementer;
     }
@@ -332,17 +337,18 @@ const getSetNumberStops = async(coords, // array of JSON objects for each step a
     }
   }
   return stopsList;
-}
+};
 
 // Search for a new route with the stops included
-const updateRoute = async (startId,
-                           destinationId,
-                           stopsList,
-                           prevCoords,
-                           prevDist,
-                           prevDuration,
-                           prevBounds
-                           ) => {
+const updateRoute = async (
+  startId,
+  destinationId,
+  stopsList,
+  prevCoords,
+  prevDist,
+  prevDuration,
+  prevBounds
+) => {
   let finalUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=place_id:${startId}&destination=place_id:${destinationId}`;
   if (stopsList.length > 0) finalUrl += "&waypoints=";
   for (var i = 0; i < stopsList.length; i++) {
@@ -370,7 +376,6 @@ const updateRoute = async (startId,
 
     coords = convertPolyline(legs);
     zoomBounds = getZoomBounds(response.data.routes[0].bounds);
-
   } catch (error) {
     console.log(error);
   }
@@ -385,7 +390,7 @@ const updateRoute = async (startId,
   };
 
   return directions;
-}
+};
 
 // return an array of up to a certain number of fuel stations near a point
 // fuel station is a JSON object with all of the data Google Maps returns for now
@@ -470,28 +475,31 @@ function getZoomBounds(bounds) {
   };
 }
 
-function backtrack(steps,
-                   index,
-                   stepIndex,
-                   lastStop,
-                   lastStopIndex,
-                   backDistance,
-                   backtrackLimit,
-                   distFunction = haversine) {
+function backtrack(
+  steps,
+  index,
+  stepIndex,
+  lastStop,
+  lastStopIndex,
+  backDistance,
+  backtrackLimit,
+  distFunction = haversine
+) {
   // const backDistance = 30000;
   // const backtrackLimit = 50000;
 
   let i = index;
   let backtrack = 0;
   let k = 0;
-  const points = 'polyline' in steps[i]
-    ? PolyLine.decode(steps[i].polyline.points)
-    : steps[i].points; // used for testing
+  const points =
+    "polyline" in steps[i]
+      ? PolyLine.decode(steps[i].polyline.points)
+      : steps[i].points; // used for testing
 
   // if we are backtracking in the middle of a step, go back through the step
   if (stepIndex != 0) {
     k = stepIndex;
-    
+
     let distances = [];
     for (let i = 0; i < points.length - 1; i++) {
       distances.push(distFunction(points[i], points[i + 1]));
@@ -533,6 +541,9 @@ function backtrack(steps,
     return -1;
   }
   // return index of the point in the steps:points array
+  console.log(
+    "Backtracked from i:" + index + ",k:" + stepIndex + " to i:" + i + ",k:" + k
+  );
   return { i: i, k: k };
 }
 
