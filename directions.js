@@ -62,7 +62,7 @@ const directionsResponse = async (req, res) => {
       res.status(200).send(directions);
     })
     .catch((error) => {
-      console.log(error);
+      //console.log(error);
       res.status(500).send(error);
     });
 };
@@ -377,7 +377,7 @@ const updateRoute = async (
     coords = convertPolyline(legs);
     zoomBounds = getZoomBounds(response.data.routes[0].bounds);
   } catch (error) {
-    console.log(error);
+    //console.log(error);
   }
 
   let directions = {
@@ -404,7 +404,8 @@ const nearestStops = async (latitude, longitude, prox, max) => {
       Math.min(response.data.results.length, max)
     ); // the first [max] results
   } catch (error) {
-    console.log(error);
+    //console.log(error);
+    console.log(requestUrl);
     return [error];
   }
 };
@@ -487,6 +488,8 @@ function backtrack(
 ) {
   // const backDistance = 30000;
   // const backtrackLimit = 50000;
+
+  console.log("Started backtracking at i:" + index + ", k:" + stepIndex);
 
   let i = index;
   let backtrack = 0;
