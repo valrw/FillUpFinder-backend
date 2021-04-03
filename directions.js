@@ -5,8 +5,8 @@ import haversine from "haversine-distance";
 
 const searchRadius = 15000;
 const metersPerMile = 1609.344;
-const backDistance = 30000;
-const backtrackLimit = 50000;
+const backDistance = 15000;
+const backtrackLimit = 20000;
 
 const directionsResponse = async (req, res) => {
   let startId = req.params.start,
@@ -22,7 +22,7 @@ const directionsResponse = async (req, res) => {
 
       // get the list of points
       const legs = response.data.routes[0].legs;
-      let coords = convertPolyline(legs);
+      let coords = convertPolyline(legs)[0].coords;
 
       // calculate total distance and total duration
       let distance = 0;
@@ -42,7 +42,10 @@ const directionsResponse = async (req, res) => {
           steps,
           req.params.mpg,
           req.params.fuelCap,
-          req.params.fuelLeft
+          req.params.fuelLeft,
+          nearestStops,
+          haversine,
+          req.params.removedStops
         );
       } else {
         stopsList = await getSetNumberStops(coords, req.params.numStops);
@@ -76,10 +79,13 @@ const getStopsOnGas = async (
   fuelCap,
   fuelLeft,
   stopsFunction = nearestStops, // for finding stops near a point
-  distFunction = haversine
+  distFunction = haversine,
+  removedStops
 ) => {
-  let stops = 0;
   let stopsList = [];
+  let stops = 0;
+  let stopsBlacklist = [];
+  if (removedStops != undefined) stopsBlacklist = removedStops.split(",");
 
   const distMiles = distance / metersPerMile; // convert from meters to miles
 
@@ -169,8 +175,18 @@ const getStopsOnGas = async (
             1
           );
 
-          if (nearStop[0] != undefined && nearStop[0].geometry != undefined) {
-            var thisStop = getStop(nearStop[0]);
+          let stopToAdd = nearStop[0];
+          let stopIndex = 1;
+          while (
+            stopToAdd != undefined &&
+            stopsBlacklist.includes(stopToAdd.place_id)
+          ) {
+            stopToAdd = nearStop[stopIndex];
+            stopIndex++;
+          }
+
+          if (stopToAdd != undefined && stopToAdd.geometry != undefined) {
+            var thisStop = getStop(stopToAdd);
 
             firstStop = false;
             stopsList.push(thisStop);
@@ -186,7 +202,7 @@ const getStopsOnGas = async (
               lastStopIndex,
               backDistance,
               backtrackLimit,
-              distFunction
+              haversine
             );
             // if we backtracked past last stop, return error
             if (backtrackResult == -1) {
@@ -230,8 +246,18 @@ const getStopsOnGas = async (
           1
         );
 
-        if (nearStop[0] != undefined && nearStop[0].geometry != undefined) {
-          var thisStop = getStop(nearStop[0]);
+        let stopToAdd = nearStop[0];
+        let stopIndex = 1;
+        while (
+          stopToAdd != undefined &&
+          stopsBlacklist.includes(stopToAdd.place_id)
+        ) {
+          stopToAdd = nearStop[stopIndex];
+          stopIndex++;
+        }
+
+        if (stopToAdd != undefined && stopToAdd.geometry != undefined) {
+          var thisStop = getStop(stopToAdd);
           firstStop = false;
           stopsList.push(thisStop);
           lastStop = [thisStop.latitude, thisStop.longitude];
@@ -245,7 +271,7 @@ const getStopsOnGas = async (
             lastStopIndex,
             backDistance,
             backtrackLimit,
-            distFunction
+            haversine
           );
           // if we backtracked past last stop, return error
           if (backtrackResult == -1) {
@@ -360,32 +386,26 @@ const updateRoute = async (
   }
   finalUrl += `&key=${process.env.MAPS_API_KEY}`;
 
-  let coords = prevCoords;
-  let distance = prevDist;
-  let duration = prevDuration;
+  let segments = prevCoords;
   let zoomBounds = prevBounds;
 
   try {
     const response = await axios.get(finalUrl);
-
     const legs = response.data.routes[0].legs;
-    distance = 0;
-    duration = 0;
+    segments = convertPolyline(legs);
+
     for (var i = 0; i < legs.length; i++) {
-      distance += legs[i].distance.value;
-      duration += legs[i].duration.value;
+      segments[i]["distance"] = legs[i].distance.value;
+      segments[i]["duration"] = legs[i].duration.value;
     }
 
-    coords = convertPolyline(legs);
     zoomBounds = getZoomBounds(response.data.routes[0].bounds);
   } catch (error) {
     console.log(error);
   }
 
   let directions = {
-    route: coords,
-    distance: distance,
-    duration: duration,
+    route: segments,
     stops: stopsList.length,
     stopsList: stopsList,
     zoomBounds: zoomBounds,
@@ -406,7 +426,8 @@ const nearestStops = async (latitude, longitude, prox, max) => {
       Math.min(response.data.results.length, max)
     ); // the first [max] results
   } catch (error) {
-    console.log(error);
+    //console.log(error);
+    console.log(requestUrl);
     return [error];
   }
 };
@@ -419,6 +440,7 @@ function getStop(nearStop) {
     name: nearStop.name,
     photos: nearStop.photos,
     vicinity: nearStop.vicinity,
+    placeId: nearStop.place_id,
   };
 
   if (nearStop.opening_hours != undefined) {
@@ -439,24 +461,27 @@ function getStop(nearStop) {
 // Given a response from google maps, generate a polyline for the route
 // consisting of LatLng coordinates
 function convertPolyline(legs) {
-  let points = [];
+  let segments = [];
 
   for (var i = 0; i < legs.length; i++) {
+    let points = [];
     let steps = legs[i].steps;
     for (var j = 0; j < steps.length; j++) {
       var stepPoints = PolyLine.decode(steps[j].polyline.points);
       points.push(...stepPoints);
     }
+
+    let coords = points.map((point, index) => {
+      return {
+        latitude: point[0],
+        longitude: point[1],
+      };
+    });
+    var leg = { coords: coords };
+    segments.push(leg);
   }
 
-  let coords = points.map((point, index) => {
-    return {
-      latitude: point[0],
-      longitude: point[1],
-    };
-  });
-
-  return coords;
+  return segments;
 }
 
 function getZoomBounds(bounds) {
@@ -490,10 +515,12 @@ function backtrack(
   // const backDistance = 30000;
   // const backtrackLimit = 50000;
 
+  console.log("Started backtracking at i:" + index + ", k:" + stepIndex);
+
   let i = index;
   let backtrack = 0;
   let k = 0;
-  const points =
+  let points =
     "polyline" in steps[i]
       ? PolyLine.decode(steps[i].polyline.points)
       : steps[i].points; // used for testing
@@ -502,10 +529,7 @@ function backtrack(
   if (stepIndex != 0) {
     k = stepIndex;
 
-    let distances = [];
-    for (let i = 0; i < points.length - 1; i++) {
-      distances.push(distFunction(points[i], points[i + 1]));
-    }
+    let distances = getDistArray(points, steps[i].distance.value, haversine);
     while (backtrack < backDistance && k >= 1) {
       k--;
       backtrack += distances[k];
@@ -518,11 +542,12 @@ function backtrack(
     backtrack += steps[i].distance.value;
     // if the step we just took is large, backtrack through the step
     if (backtrack > backDistance * 1.5) {
-      backtrack -= steps[i].distance.value;
-      let distances = [];
-      for (let i = 0; i < points.length - 1; i++) {
-        distances.push(distFunction(points[i], points[i + 1]));
-      }
+      let gmapsDist = steps[i].distance.value;
+      backtrack -= gmapsDist;
+
+      points = PolyLine.decode(steps[i].polyline.points);
+      let distances = getDistArray(points, gmapsDist, distFunction);
+
       k = points.length - 1;
       while (backtrack < backDistance) {
         k--;
@@ -531,14 +556,14 @@ function backtrack(
     }
   }
   // get the point we backtracked to
-  // let backPointsList = PolyLine.decode(steps[i].polyline.points);
-  // let backtrackPoint = backPointsList[k];
-  let backtrackPoint = points[k];
+  let backPointsList = PolyLine.decode(steps[i].polyline.points);
+  let backtrackPoint = backPointsList[k];
+
   // Ensure that the point is not too close to or behind the last stop
   if (
     distFunction(lastStop, backtrackPoint) < backtrackLimit ||
-    lastStopIndex.i > index ||
-    (lastStopIndex.i == index && lastStopIndex.k > stepIndex)
+    lastStopIndex.i > i ||
+    (lastStopIndex.i == i && lastStopIndex.k > k)
   ) {
     return -1;
   }
@@ -547,6 +572,25 @@ function backtrack(
     "Backtracked from i:" + index + ",k:" + stepIndex + " to i:" + i + ",k:" + k
   );
   return { i: i, k: k };
+}
+
+function getDistArray(points, gmapsDist, distFunction) {
+  let distances = [];
+  let sum = 0;
+
+  let newPoints = points.map((point, index) => {
+    return {
+      latitude: point[0],
+      longitude: point[1],
+    };
+  });
+  for (let j = 0; j < points.length - 1; j++) {
+    let currDist = distFunction(newPoints[j], newPoints[j + 1]);
+    sum += currDist;
+    distances.push(currDist);
+  }
+
+  return distances;
 }
 
 export default directionsResponse;
