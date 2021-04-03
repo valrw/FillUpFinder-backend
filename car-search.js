@@ -67,10 +67,12 @@ const carResponse = (req, res) => {
           axios
           .get(`https://www.carqueryapi.com/api/0.3/?cmd=getTrims&make=${make}&model=${model}&year=${year}`)
           .then(async (response) => {
-            fuelCap = parseFloat(response.data.Trims[0].model_fuel_cap_l);
-
-            // sometimes it actually comes back in gallons instead of liters
-            if (fuelCap >= 30) { fuelCap /= litersPerGallon; } // a reasonable size in liters
+            fuelCap = response.data.Trims[0].model_fuel_cap_l;
+            if (fuelCap != null) {
+              fuelCap = parseFloat(fuelCap);
+              // sometimes it actually comes back in gallons instead of liters
+              if (fuelCap >= 30) { fuelCap /= litersPerGallon; } // a reasonable size in liters
+            }
 
             let optionsData = [];
             for (let i = 0; i < options.length; i++) {
