@@ -9,7 +9,7 @@ const app = express();
 app.get("/api/vehicle/:make/:model/:year", carResponse);
 
 app.get(
-  "/api/directions/:start/:end/:fuelLeft/:fuelCap/:mpg/:calcOnGas/:numStops?",
+  "/api/directions/:start/:end/:fuelLeft/:fuelCap/:mpg/:calcOnGas/:numStops?/:removedStops?",
   directionsResponse
 );
 

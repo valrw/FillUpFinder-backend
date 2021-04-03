@@ -5,8 +5,8 @@ import haversine from "haversine-distance";
 
 const searchRadius = 15000;
 const metersPerMile = 1609.344;
-const backDistance = 30000;
-const backtrackLimit = 50000;
+const backDistance = 15000;
+const backtrackLimit = 20000;
 
 const directionsResponse = async (req, res) => {
   let startId = req.params.start,
@@ -42,7 +42,10 @@ const directionsResponse = async (req, res) => {
           steps,
           req.params.mpg,
           req.params.fuelCap,
-          req.params.fuelLeft
+          req.params.fuelLeft,
+          nearestStops,
+          haversine,
+          req.params.removedStops
         );
       } else {
         stopsList = await getSetNumberStops(coords, req.params.numStops);
@@ -62,6 +65,7 @@ const directionsResponse = async (req, res) => {
       res.status(200).send(directions);
     })
     .catch((error) => {
+      console.log(error);
       res.status(500).send(error);
     });
 };
@@ -75,10 +79,13 @@ const getStopsOnGas = async (
   fuelCap,
   fuelLeft,
   stopsFunction = nearestStops, // for finding stops near a point
-  distFunction = haversine
+  distFunction = haversine,
+  removedStops
 ) => {
-  let stops = 0;
   let stopsList = [];
+  let stops = 0;
+  let stopsBlacklist = [];
+  if (removedStops != undefined) stopsBlacklist = removedStops.split(",");
 
   const distMiles = distance / metersPerMile; // convert from meters to miles
 
@@ -166,8 +173,18 @@ const getStopsOnGas = async (
             1
           );
 
-          if (nearStop[0] != undefined && nearStop[0].geometry != undefined) {
-            var thisStop = getStop(nearStop[0]);
+          let stopToAdd = nearStop[0];
+          let stopIndex = 1;
+          while (
+            stopToAdd != undefined &&
+            stopsBlacklist.includes(stopToAdd.place_id)
+          ) {
+            stopToAdd = nearStop[stopIndex];
+            stopIndex++;
+          }
+
+          if (stopToAdd != undefined && stopToAdd.geometry != undefined) {
+            var thisStop = getStop(stopToAdd);
 
             firstStop = false;
             stopsList.push(thisStop);
@@ -183,7 +200,7 @@ const getStopsOnGas = async (
               lastStopIndex,
               backDistance,
               backtrackLimit,
-              distFunction
+              haversine
             );
             // if we backtracked past last stop, return error
             if (backtrackResult == -1) {
@@ -227,8 +244,18 @@ const getStopsOnGas = async (
           1
         );
 
-        if (nearStop[0] != undefined && nearStop[0].geometry != undefined) {
-          var thisStop = getStop(nearStop[0]);
+        let stopToAdd = nearStop[0];
+        let stopIndex = 1;
+        while (
+          stopToAdd != undefined &&
+          stopsBlacklist.includes(stopToAdd.place_id)
+        ) {
+          stopToAdd = nearStop[stopIndex];
+          stopIndex++;
+        }
+
+        if (stopToAdd != undefined && stopToAdd.geometry != undefined) {
+          var thisStop = getStop(stopToAdd);
           firstStop = false;
           stopsList.push(thisStop);
           lastStop = [thisStop.latitude, thisStop.longitude];
@@ -242,7 +269,7 @@ const getStopsOnGas = async (
             lastStopIndex,
             backDistance,
             backtrackLimit,
-            distFunction
+            haversine
           );
           // if we backtracked past last stop, return error
           if (backtrackResult == -1) {
@@ -411,6 +438,7 @@ function getStop(nearStop) {
     name: nearStop.name,
     photos: nearStop.photos,
     vicinity: nearStop.vicinity,
+    placeId: nearStop.place_id,
   };
 
   if (nearStop.opening_hours != undefined) {
@@ -490,7 +518,7 @@ function backtrack(
   let i = index;
   let backtrack = 0;
   let k = 0;
-  const points =
+  let points =
     "polyline" in steps[i]
       ? PolyLine.decode(steps[i].polyline.points)
       : steps[i].points; // used for testing
@@ -499,10 +527,7 @@ function backtrack(
   if (stepIndex != 0) {
     k = stepIndex;
 
-    let distances = [];
-    for (let i = 0; i < points.length - 1; i++) {
-      distances.push(distFunction(points[i], points[i + 1]));
-    }
+    let distances = getDistArray(points, steps[i].distance.value, haversine);
     while (backtrack < backDistance && k >= 1) {
       k--;
       backtrack += distances[k];
@@ -515,11 +540,12 @@ function backtrack(
     backtrack += steps[i].distance.value;
     // if the step we just took is large, backtrack through the step
     if (backtrack > backDistance * 1.5) {
-      backtrack -= steps[i].distance.value;
-      let distances = [];
-      for (let i = 0; i < points.length - 1; i++) {
-        distances.push(distFunction(points[i], points[i + 1]));
-      }
+      let gmapsDist = steps[i].distance.value;
+      backtrack -= gmapsDist;
+
+      points = PolyLine.decode(steps[i].polyline.points);
+      let distances = getDistArray(points, gmapsDist, distFunction);
+
       k = points.length - 1;
       while (backtrack < backDistance) {
         k--;
@@ -528,14 +554,14 @@ function backtrack(
     }
   }
   // get the point we backtracked to
-  // let backPointsList = PolyLine.decode(steps[i].polyline.points);
-  // let backtrackPoint = backPointsList[k];
-  let backtrackPoint = points[k];
+  let backPointsList = PolyLine.decode(steps[i].polyline.points);
+  let backtrackPoint = backPointsList[k];
+
   // Ensure that the point is not too close to or behind the last stop
   if (
     distFunction(lastStop, backtrackPoint) < backtrackLimit ||
-    lastStopIndex.i > index ||
-    (lastStopIndex.i == index && lastStopIndex.k > stepIndex)
+    lastStopIndex.i > i ||
+    (lastStopIndex.i == i && lastStopIndex.k > k)
   ) {
     return -1;
   }
@@ -544,6 +570,25 @@ function backtrack(
     "Backtracked from i:" + index + ",k:" + stepIndex + " to i:" + i + ",k:" + k
   );
   return { i: i, k: k };
+}
+
+function getDistArray(points, gmapsDist, distFunction) {
+  let distances = [];
+  let sum = 0;
+
+  let newPoints = points.map((point, index) => {
+    return {
+      latitude: point[0],
+      longitude: point[1],
+    };
+  });
+  for (let j = 0; j < points.length - 1; j++) {
+    let currDist = distFunction(newPoints[j], newPoints[j + 1]);
+    sum += currDist;
+    distances.push(currDist);
+  }
+
+  return distances;
 }
 
 export default directionsResponse;
