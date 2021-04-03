@@ -139,18 +139,17 @@ const getStopsOnGas = async (
       let stepDistLeft = 0;
       let pathDists = [];
 
-      while (stepDistLeft < stepDist && pointIndex < currPoints.length - 1) {
-        let startLatLng = currPoints[pointIndex];
-        let endLatLng = currPoints[pointIndex + 1];
+      let polyIndex = 0;
+      while (stepDistLeft < stepDist && polyIndex < currPoints.length - 1) {
+        
+        let startLatLng = currPoints[polyIndex];
+        let endLatLng = currPoints[polyIndex + 1];
 
         stepDistLeft += distFunction(startLatLng, endLatLng);
         pathDists.push(distFunction(startLatLng, endLatLng));
 
-        pointIndex++;
+        polyIndex++;
       }
-      console.log(`STEP ${i} DIST ` + stepDist);
-      console.log(`STEP ${i} SUM ` + stepDistLeft);
-      console.log();
 
       // if we are backtracking, set k to backtrack point
       let k = pointIndex;
