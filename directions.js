@@ -141,6 +141,7 @@ const getStopsOnGas = async (
 
       let polyIndex = 0;
       while (stepDistLeft < stepDist && polyIndex < currPoints.length - 1) {
+        
         let startLatLng = currPoints[polyIndex];
         let endLatLng = currPoints[polyIndex + 1];
 
