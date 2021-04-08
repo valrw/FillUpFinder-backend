@@ -161,7 +161,7 @@ function main() {
   }
 }
 
-function pointDistance(a, b) {
+export function pointDistance(a, b) {
   let x, y;
   if (a.latitude != undefined) {
     x = a.latitude - b.latitude;
