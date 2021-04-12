@@ -287,9 +287,6 @@ const getSetNumberStops = async (
   distFunction = haversine
 ) => {
   const stops = parseInt(numStops);
-  const longToLat = 53 / 69.172;
-  const latToMeters = 110567;
-
   let stopsList = [];
 
   // Calculate where the stops are
@@ -297,10 +294,7 @@ const getSetNumberStops = async (
   // First get total distance
   let totalDist = 0;
   for (var i = 1; i < coords.length; i++) {
-    totalDist += Math.abs(coords[i].latitude - coords[i - 1].latitude);
-    totalDist += Math.abs(
-      longToLat * (coords[i].longitude - coords[i - 1].longitude)
-    );
+    totalDist += distFunction(coords[i], coords[i - 1]);
   }
 
   // Find a number of points spread evenly along the route
@@ -308,10 +302,7 @@ const getSetNumberStops = async (
   let currDist = 0;
   let stopSearchList = [];
   for (var i = 1; i < coords.length; i++) {
-    currDist += Math.abs(coords[i].latitude - coords[i - 1].latitude);
-    currDist += Math.abs(
-      longToLat * (coords[i].longitude - coords[i - 1].longitude)
-    );
+    currDist += distFunction(coords[i], coords[i - 1]);
     if (currDist > goalDist) {
       stopSearchList.push(coords[i]);
       currDist = 0;
@@ -326,10 +317,7 @@ const getSetNumberStops = async (
     let currMult = 1;
     let nearStop = [];
 
-    while (
-      nearStop[0] == undefined &&
-      searchRadius * currMult < (goalDist * latToMeters) / 2
-    ) {
+    while (nearStop[0] == undefined && searchRadius * currMult < goalDist / 2) {
       nearStop = await stopsFunction(
         currStop.latitude,
         currStop.longitude,
@@ -405,6 +393,7 @@ const updateRoute = async (
 const nearestStops = async (latitude, longitude, prox, max) => {
   const requestUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${prox}&type=gas_station&key=${process.env.MAPS_API_KEY}`;
   try {
+    console.log("Searching at " + latitude + " " + longitude);
     const response = await axios.get(requestUrl);
     return response.data.results.slice(
       0,
