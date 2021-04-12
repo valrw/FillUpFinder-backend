@@ -34,14 +34,14 @@ function main() {
 
     let distAfterStop = distSinceStop + stepDist;
 
-    console.log(
-      "distAfterStop:",
-      distAfterStop,
-      "distSinceStop:",
-      distSinceStop,
-      "tankLeft:",
-      tankLeft
-    );
+    // console.log(
+    //   "distAfterStop:",
+    //   distAfterStop,
+    //   "distSinceStop:",
+    //   distSinceStop,
+    //   "tankLeft:",
+    //   tankLeft
+    // );
     if (
       (distAfterStop >= distCapacity && tankLeft > tankLimit) ||
       stepDist >= distCapacity ||
@@ -70,14 +70,14 @@ function main() {
       pointIndex = 0;
       let backtracked = false;
       while (stepDistLeft >= distCapacity - distSinceStop) {
-        console.log(
-          "-- DistSinceStop",
-          distSinceStop,
-          "currpoint:",
-          "(" + currPoints[k].latitude + "," + currPoints[k].longitude + ")",
-          "This dist:",
-          pathDists[k]
-        );
+        // console.log(
+        //   "-- DistSinceStop",
+        //   distSinceStop,
+        //   "currpoint:",
+        //   "(" + currPoints[k].latitude + "," + currPoints[k].longitude + ")",
+        //   "This dist:",
+        //   pathDists[k]
+        // );
 
         distSinceStop += pathDists[k];
         stepDistLeft -= pathDists[k];
@@ -175,7 +175,7 @@ export function pointDistance(a, b) {
 }
 
 function nearestStops(a, b, i) {
-  console.log("* Searching for stop at", a + "," + b);
+  // console.log("* Searching for stop at", a + "," + b);
   if (a == 0 && b == 6) return undefined;
   else return [a, b];
 }
@@ -242,7 +242,7 @@ function backtrack(steps, index, stepIndex, lastStop, lastStopIndex) {
   ) {
     return -1;
   }
-  console.log("i:", i, "k:", k, "Point:", steps[i].points[k]);
+  // console.log("i:", i, "k:", k, "Point:", steps[i].points[k]);
   return { i: i, k: k };
 }
 
