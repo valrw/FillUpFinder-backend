@@ -32,6 +32,10 @@ const directionsResponse = async (req, res) => {
       }
 
       let stopsList = [];
+      let stopsBlacklist = [];
+      if (req.params.removedStops != undefined)
+        stopsBlacklist = req.params.removedStops.split(",");
+
       if (req.params.calcOnGas == "true") {
         stopsList = await getStopsOnGas(
           distance,
@@ -41,12 +45,16 @@ const directionsResponse = async (req, res) => {
           req.params.fuelLeft,
           nearestStops,
           haversine,
-          req.params.removedStops,
+          stopsBlacklist,
           backDistance,
           backtrackLimit
         );
       } else {
-        stopsList = await getSetNumberStops(coords, req.params.numStops);
+        stopsList = await getSetNumberStops(
+          coords,
+          req.params.numStops,
+          stopsBlacklist
+        );
       }
 
       let zoomBounds = getZoomBounds(response.data.routes[0].bounds);
@@ -78,13 +86,11 @@ export const getStopsOnGas = async (
   fuelLeft,
   stopsFunction = nearestStops, // for finding stops near a point
   distFunction = haversine,
-  removedStops,
+  stopsBlacklist,
   backDistance,
   backtrackLimit
 ) => {
   let stopsList = [];
-  let stopsBlacklist = [];
-  if (removedStops != undefined) stopsBlacklist = removedStops.split(",");
 
   const initDist = mpg * (fuelLeft - 0.1 * fuelCap) * metersPerMile; // distance in meters that can be traveled before first stop
   const fullTankDist = mpg * (0.9 * fuelCap) * metersPerMile; // distance in meters that can be traveled with a full tank (stop when 10% left)
@@ -154,7 +160,7 @@ export const getStopsOnGas = async (
             currPoints[k].latitude,
             currPoints[k].longitude,
             searchRadius,
-            1
+            5
           );
 
           let stopToAdd = nearStop[0];
@@ -228,7 +234,7 @@ export const getStopsOnGas = async (
           steps[i - 1].end_location.lat,
           steps[i - 1].end_location.lng,
           searchRadius,
-          1
+          5
         );
 
         let stopToAdd = nearStop[0];
@@ -283,6 +289,7 @@ export const getStopsOnGas = async (
 const getSetNumberStops = async (
   coords, // array of JSON objects for each step as returned by Maps API
   numStops,
+  stopsBlacklist,
   stopsFunction = nearestStops,
   distFunction = haversine
 ) => {
@@ -315,25 +322,35 @@ const getSetNumberStops = async (
 
     const multIncrementer = 1.5;
     let currMult = 1;
-    let nearStop = [];
+    let stopToAdd = undefined;
 
-    while (nearStop[0] == undefined && searchRadius * currMult < goalDist / 2) {
-      nearStop = await stopsFunction(
+    while (stopToAdd == undefined && searchRadius * currMult < goalDist / 2) {
+      let nearStop = await stopsFunction(
         currStop.latitude,
         currStop.longitude,
         searchRadius * currMult,
-        1
+        10
       );
-      currMult *= multIncrementer;
+
+      stopToAdd = nearStop[0];
+      let stopIndex = 1;
+      while (
+        stopToAdd != undefined &&
+        stopsBlacklist.includes(stopToAdd.place_id)
+      ) {
+        stopToAdd = nearStop[stopIndex];
+        stopIndex++;
+      }
+      currMult += multIncrementer;
     }
 
-    if (nearStop[0] != undefined && nearStop[0].geometry != undefined) {
-      var thisStop = getStop(nearStop[0]);
+    if (stopToAdd != undefined && stopToAdd.geometry != undefined) {
+      var thisStop = getStop(stopToAdd);
 
       stopsList.push(thisStop);
     } else {
-      res.status(500).send({ message: "No gas stations found" });
       console.log("No gas stations found");
+      res.status(500).send({ message: "No gas stations found" });
       return;
     }
   }
@@ -393,7 +410,7 @@ const updateRoute = async (
 const nearestStops = async (latitude, longitude, prox, max) => {
   const requestUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${prox}&type=gas_station&key=${process.env.MAPS_API_KEY}`;
   try {
-    console.log("Searching at " + latitude + " " + longitude);
+    console.log(`Searching at ${latitude} ${longitude} and radius is ${prox}`);
     const response = await axios.get(requestUrl);
     return response.data.results.slice(
       0,
