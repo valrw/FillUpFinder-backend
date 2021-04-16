@@ -148,8 +148,6 @@ export const getStopsOnGas = async (
       kIndex = 0;
       let backtracked = false;
 
-      if (i==26) console.log(currPoints.length)
-
       // loop path coordinates until the step can be completed without stopping
       while (
         stepDistLeft >= distCapacity - distSinceStop &&
@@ -226,7 +224,11 @@ export const getStopsOnGas = async (
 
       // account for distance traveled since the last stop on this stretch
       if (backtracked) continue;
-      distSinceStop += stepDistLeft;
+      distSinceStop = 0;
+      let currDists = pathDists.slice(k);
+      for (let j = 0; j < currDists.length; j++) {
+        distSinceStop += pathDists[j];
+      }
     } else {
       distSinceStop += stepDist;
       if (distSinceStop > distCapacity) {
@@ -512,7 +514,7 @@ function backtrack(
   // const backDistance = 30000;
   // const backtrackLimit = 50000;
 
-  console.log("Started backtracking at i:" + index + ", k:" + stepIndex);
+  //console.log("Started backtracking at i:" + index + ", k:" + stepIndex);
 
   let i = index;
   let backtrack = 0;
@@ -584,9 +586,9 @@ function backtrack(
     return -1;
   }
   // return index of the point in the steps:points array
-  console.log(
-    "Backtracked from i:" + index + ",k:" + stepIndex + " to i:" + i + ",k:" + k
-  );
+  // console.log(
+  //   "Backtracked from i:" + index + ",k:" + stepIndex + " to i:" + i + ",k:" + k
+  // );
   return { i: i, k: k };
 }
 
