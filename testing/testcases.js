@@ -18,6 +18,9 @@ export const steps3 = [
     distance: {
       value: 17,
     },
+    duration: {
+      value: 0.15
+    },
   },
   {
     points: [
@@ -36,7 +39,10 @@ export const steps3 = [
     },
     distance: {
       value: 3,
-    }
+    },
+    duration: {
+      value: 0.15
+    },
   },
 ]
 
@@ -65,6 +71,9 @@ export const steps2 = [
     distance: {
       value: 12,
     },
+    duration: {
+      value: 0.15
+    },
   },
   {
     points: [
@@ -84,6 +93,9 @@ export const steps2 = [
     },
     distance: {
       value: 8,
+    },
+    duration: {
+      value: 0.15
     },
   },
 ];
@@ -112,6 +124,9 @@ export const steps1 = [
     distance: {
       value: 4,
     },
+    duration: {
+      value: 0.15
+    },
   },
   {
     points: [
@@ -131,6 +146,9 @@ export const steps1 = [
     },
     distance: {
       value: 21,
+    },
+    duration: {
+      value: 0.15
     },
   },
 ];
@@ -160,6 +178,9 @@ export const steps0 = [
     distance: {
       value: 16,
     },
+    duration: {
+      value: 0.15
+    },
   },
   {
     points: [
@@ -179,6 +200,9 @@ export const steps0 = [
     },
     distance: {
       value: 4,
+    },
+    duration: {
+      value: 0.15
     },
   },
 ]

@@ -32,6 +32,8 @@ async function directions(steps) {
         distance,
         steps,
         mpg,
+        mpg,
+        mpg,
         fuelCap,
         fuelLeft,
         testNearestStops,
