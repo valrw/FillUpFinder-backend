@@ -25,6 +25,9 @@ const directionsResponse = async (req, res) => {
       let duration = 0;
       let steps = [];
 
+      console.log(`start ${coords[0].latitude}, ${coords[0].longitude}`)
+      console.log(`end ${coords[coords.length-1].latitude}, ${coords[coords.length-1].longitude}`)
+
       for (var i = 0; i < legs.length; i++) {
         distance += legs[i].distance.value;
         duration += legs[i].duration.value;
@@ -145,6 +148,8 @@ export const getStopsOnGas = async (
       kIndex = 0;
       let backtracked = false;
 
+      if (i==26) console.log(currPoints.length)
+
       // loop path coordinates until the step can be completed without stopping
       while (
         stepDistLeft >= distCapacity - distSinceStop &&
@@ -221,10 +226,7 @@ export const getStopsOnGas = async (
 
       // account for distance traveled since the last stop on this stretch
       if (backtracked) continue;
-      let currDists = pathDists.slice(k);
-      for (let j = 0; j < currDists; j++) {
-        distSinceStop += pathDists[j];
-      }
+      distSinceStop += stepDistLeft;
     } else {
       distSinceStop += stepDist;
       if (distSinceStop > distCapacity) {
@@ -236,6 +238,7 @@ export const getStopsOnGas = async (
           searchRadius,
           5
         );
+
 
         let stopToAdd = nearStop[0];
         let stopIndex = 1;
