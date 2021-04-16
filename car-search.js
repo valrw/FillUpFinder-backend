@@ -88,9 +88,18 @@ const carResponse = (req, res) => {
 
                 try {
                   const mpgResponse = await axios.get(`https://fueleconomy.gov/ws/rest/vehicle/${id}`);
-                  let mpg = mpgResponse.data.comb08; // combination city + highway for primary fuel type
+                  const mpg = mpgResponse.data.comb08; // combination city + highway for primary fuel type
+                  const mpgCity = mpgResponse.data.city08;
+                  const mpgHighway = mpgResponse.data.highway08;
 
-                  optionsData.push({ "make": mpgResponse.data.make, "model": options[i], "year": year, "mpg": mpg, "fuelCap": fuelCap });
+                  optionsData.push({
+                    "make": mpgResponse.data.make,
+                    "model": options[i],
+                    "year": year,
+                    "mpg": mpg,
+                    "mpgCity": mpgCity,
+                    "mpgHighway": mpgHighway,
+                    "fuelCap": fuelCap });
 
                 } catch {
                   console.log(error);

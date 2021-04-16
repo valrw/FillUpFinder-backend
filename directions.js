@@ -1,7 +1,7 @@
 import axios from "axios";
 import PolyLine from "@mapbox/polyline";
 import haversine from "haversine-distance";
-// import GeoPoint from "geopoint";
+import isHighway from "./city-highway.js";
 
 const searchRadius = 15000;
 const metersPerMile = 1609.344;
@@ -31,12 +31,17 @@ const directionsResponse = async (req, res) => {
         steps = steps.concat(legs[i].steps);
       }
 
+      const mpgCity = req.query.mpgCity ? req.query.mpgCity : req.params.mpg;
+      const mpgHighway = req.query.mpgHighway ? req.query.mpgHighway : req.params.mpg;
+
       let stopsList = [];
       if (req.params.calcOnGas == "true") {
         stopsList = await getStopsOnGas(
           distance,
           steps,
           req.params.mpg,
+          mpgCity,
+          mpgHighway,
           req.params.fuelCap,
           req.params.fuelLeft,
           nearestStops,
@@ -74,6 +79,8 @@ export const getStopsOnGas = async (
   distance,
   steps, // array of JSON objects for each step as returned by Maps API
   mpg,
+  mpgCity,
+  mpgHighway,
   fuelCap,
   fuelLeft,
   stopsFunction = nearestStops, // for finding stops near a point
@@ -85,6 +92,9 @@ export const getStopsOnGas = async (
   let stopsList = [];
   let stopsBlacklist = [];
   if (removedStops != undefined) stopsBlacklist = removedStops.split(",");
+
+  mpg = mpgHighway; // use mpgHighway as the default...perhaps this is confusing
+  const distAdjustCity = mpgHighway / mpgCity;
 
   const initDist = mpg * (fuelLeft - 0.1 * fuelCap) * metersPerMile; // distance in meters that can be traveled before first stop
   const fullTankDist = mpg * (0.9 * fuelCap) * metersPerMile; // distance in meters that can be traveled with a full tank (stop when 10% left)
@@ -102,6 +112,7 @@ export const getStopsOnGas = async (
   while (i < steps.length) {
     step = steps[i];
     stepDist = step.distance.value ? step.distance.value : step.distance;
+    if (!isHighway(step)) { stepDist *= distAdjustCity }; // increase step dist for a city so we can use the same mpg throughout
 
     let currPoints =
       "polyline" in step ? PolyLine.decode(step.polyline.points) : step.points;
@@ -116,12 +127,8 @@ export const getStopsOnGas = async (
     // also handle the case where fuel will run out but tank is more than 30% full
     const tankLimit = 0.3;
 
-    let tankLeft = 1 - distSinceStop / fullTankDist;
-    let distCapacity = fullTankDist;
-    if (firstStop) {
-      tankLeft = initDist / fullTankDist - distSinceStop / fullTankDist;
-      distCapacity = initDist;
-    }
+    let distCapacity = firstStop ? initDist : fullTankDist;
+    let tankLeft = distCapacity / fullTankDist - distSinceStop / fullTankDist;
 
     if (
       (distSinceStop + stepDist >= distCapacity && tankLeft > tankLimit) ||
@@ -131,8 +138,10 @@ export const getStopsOnGas = async (
       // for accuracy, add distance between all points on the step
       // stepDistLeft tends to be a bit larger than stepDist
       let ans = getDistArray(currPoints, distFunction);
-      let stepDistLeft = ans.sum;
-      let pathDists = ans.distances;
+      let stepDistLeft = ans.sum * (!isHighway(step) ? distAdjustCity : 1);
+      let pathDists = ans.distances.map((dist) => {
+        return dist * (!isHighway(step) ? distAdjustCity : 1)
+      });
 
       // if we are backtracking, set k to backtrack point
       let k = kIndex;
