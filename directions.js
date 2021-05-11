@@ -16,6 +16,11 @@ const directionsResponse = async (req, res) => {
   axios
     .get(requestUrl)
     .then(async (response) => {
+      if (response.data.routes.length == 0) {
+        res.status(422).send("No routes found");
+        return;
+      }
+
       // get the list of points
       const legs = response.data.routes[0].legs;
       let coords = convertPolyline(legs)[0].coords;
@@ -43,20 +48,26 @@ const directionsResponse = async (req, res) => {
         stopsBlacklist = req.params.removedStops.split(",");
 
       if (req.params.calcOnGas == "true") {
-        stopsList = await getStopsOnGas(
-          distance,
-          steps,
-          req.params.mpg,
-          mpgCity,
-          mpgHighway,
-          req.params.fuelCap,
-          req.params.fuelLeft,
-          nearestStops,
-          haversine,
-          stopsBlacklist,
-          backDistance,
-          backtrackLimit
-        );
+        try {
+          stopsList = await getStopsOnGas(
+            distance,
+            steps,
+            req.params.mpg,
+            mpgCity,
+            mpgHighway,
+            req.params.fuelCap,
+            req.params.fuelLeft,
+            nearestStops,
+            haversine,
+            stopsBlacklist,
+            backDistance,
+            backtrackLimit
+          );
+        } catch (error) {
+          // this will handle the backtracking errors
+          res.status(500).send(error);
+        }
+
       } else {
         stopsList = await getSetNumberStops(
           coords,
@@ -75,7 +86,6 @@ const directionsResponse = async (req, res) => {
         duration,
         zoomBounds
       );
-
       res.status(200).send(directions);
     })
     .catch((error) => {
@@ -207,7 +217,7 @@ export const getStopsOnGas = async (
             // if we backtracked past last stop, return error
             if (backtrackResult == -1) {
               console.log("ERROR");
-              return "ERROR";
+              throw new Error("backtracking error");
             }
             // set i, k, to new point that we backtracked to
             i = backtrackResult.i;
@@ -281,7 +291,7 @@ export const getStopsOnGas = async (
           // if we backtracked past last stop, return error
           if (backtrackResult == -1) {
             console.log("ERROR");
-            return "ERROR";
+            throw new Error("backtracking error");
           }
           // set i, k, to new point that we backtracked to
           i = backtrackResult.i;
@@ -406,6 +416,7 @@ const updateRoute = async (
     zoomBounds = getZoomBounds(response.data.routes[0].bounds);
   } catch (error) {
     console.log(error);
+    // if there is an error here, the old route (not adjusted for stops) will be returned along with stop locations
   }
 
   let directions = {
