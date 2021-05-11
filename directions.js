@@ -17,7 +17,7 @@ const directionsResponse = async (req, res) => {
     .get(requestUrl)
     .then(async (response) => {
       if (response.data.routes.length == 0) {
-        res.sendStatus(422);
+        res.status(422).send("No routes found");
         return;
       }
 
