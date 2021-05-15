@@ -465,7 +465,7 @@ function getStop(nearStop) {
 
 // Given a response from google maps, generate a polyline for the route
 // consisting of LatLng coordinates
-function convertPolyline(legs) {
+export function convertPolyline(legs) {
   let segments = [];
 
   for (var i = 0; i < legs.length; i++) {
