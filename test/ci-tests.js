@@ -6,9 +6,9 @@ import {
   testNearestStops,
 } from "../testing/testcases.js";
 import { pointDistance } from "../testing/tests.js";
-import { getStopsOnGas } from "../directions.js";
+import { getStopsOnGas } from "../src/directions.js";
 
-import chai from 'chai';
+import chai from "chai";
 chai.should();
 
 async function directions(steps) {
@@ -28,28 +28,27 @@ async function directions(steps) {
   let stopsList = [];
   // calcOnGas
   try {
-      stopsList = await getStopsOnGas(
-        distance,
-        steps,
-        mpg,
-        mpg,
-        mpg,
-        fuelCap,
-        fuelLeft,
-        testNearestStops,
-        pointDistance,
-        "",
-        1
-      );
-      return stopsList;
+    stopsList = await getStopsOnGas(
+      distance,
+      steps,
+      mpg,
+      mpg,
+      mpg,
+      fuelCap,
+      fuelLeft,
+      testNearestStops,
+      pointDistance,
+      "",
+      1
+    );
+    return stopsList;
   } catch (error) {
-      console.log(error);
+    console.log(error);
   }
 }
 
-describe("Directions", function() {
-
-  it("Should stop before a step where fuel would run out", function(done) {
+describe("Directions", function () {
+  it("Should stop before a step where fuel would run out", function (done) {
     directions(steps0)
       .then((stops) => {
         stops.length.should.equal(1);
@@ -59,10 +58,10 @@ describe("Directions", function() {
       })
       .catch((err) => {
         done(err);
-      })
-  })
+      });
+  });
 
-  it("Should stop during a step longer than the max full tank distance", function(done) {
+  it("Should stop during a step longer than the max full tank distance", function (done) {
     directions(steps1)
       .then((stops) => {
         stops.length.should.equal(1);
@@ -72,10 +71,10 @@ describe("Directions", function() {
       })
       .catch((err) => {
         done(err);
-      })
-  })
+      });
+  });
 
-  it("Should stop during a step where fuel runs out but tank is over 30% at the start", function(done) {
+  it("Should stop during a step where fuel runs out but tank is over 30% at the start", function (done) {
     directions(steps2)
       .then((stops) => {
         stops.length.should.equal(1);
@@ -85,10 +84,10 @@ describe("Directions", function() {
       })
       .catch((err) => {
         done(err);
-      })
-  })
+      });
+  });
 
-  it("Should backtrack if no stop is immediately found", function(done) {
+  it("Should backtrack if no stop is immediately found", function (done) {
     directions(steps3)
       .then((stops) => {
         stops.length.should.equal(1);
@@ -98,6 +97,6 @@ describe("Directions", function() {
       })
       .catch((err) => {
         done(err);
-      })
-  })
-})
+      });
+  });
+});
