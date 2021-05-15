@@ -25,8 +25,12 @@ const directionsResponse = async (req, res) => {
       let duration = 0;
       let steps = [];
 
-      console.log(`start ${coords[0].latitude}, ${coords[0].longitude}`)
-      console.log(`end ${coords[coords.length-1].latitude}, ${coords[coords.length-1].longitude}`)
+      console.log(`start ${coords[0].latitude}, ${coords[0].longitude}`);
+      console.log(
+        `end ${coords[coords.length - 1].latitude}, ${
+          coords[coords.length - 1].longitude
+        }`
+      );
 
       for (var i = 0; i < legs.length; i++) {
         distance += legs[i].distance.value;
@@ -35,7 +39,9 @@ const directionsResponse = async (req, res) => {
       }
 
       const mpgCity = req.query.mpgCity ? req.query.mpgCity : req.params.mpg;
-      const mpgHighway = req.query.mpgHighway ? req.query.mpgHighway : req.params.mpg;
+      const mpgHighway = req.query.mpgHighway
+        ? req.query.mpgHighway
+        : req.params.mpg;
 
       let stopsList = [];
       let stopsBlacklist = [];
@@ -121,7 +127,9 @@ export const getStopsOnGas = async (
   while (i < steps.length) {
     step = steps[i];
     stepDist = step.distance.value ? step.distance.value : step.distance;
-    if (!isHighway(step)) { stepDist *= distAdjustCity }; // increase step dist for a city so we can use the same mpg throughout
+    if (!isHighway(step)) {
+      stepDist *= distAdjustCity;
+    } // increase step dist for a city so we can use the same mpg throughout
 
     let currPoints =
       "polyline" in step ? PolyLine.decode(step.polyline.points) : step.points;
@@ -149,7 +157,7 @@ export const getStopsOnGas = async (
       let ans = getDistArray(currPoints, distFunction);
       let stepDistLeft = ans.sum * (!isHighway(step) ? distAdjustCity : 1);
       let pathDists = ans.distances.map((dist) => {
-        return dist * (!isHighway(step) ? distAdjustCity : 1)
+        return dist * (!isHighway(step) ? distAdjustCity : 1);
       });
 
       // if we are backtracking, set k to backtrack point
@@ -249,7 +257,6 @@ export const getStopsOnGas = async (
           searchRadius,
           5
         );
-
 
         let stopToAdd = nearStop[0];
         let stopIndex = 1;
