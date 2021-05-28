@@ -16,6 +16,11 @@ app.get(
 
 app.get("/api/update/", updateRoute);
 
+app.get(
+  "/api/custom-directions/:start/:end/:fuelLeft/:fuelCap/:mpg/:calcOnGas/:numStops?/:removedStops?",
+  customDirections
+);
+
 const port = process.env.PORT || 9090;
 app.listen(port);
 
