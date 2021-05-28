@@ -2,6 +2,7 @@ import express from "express";
 import directionsResponse from "./src/directions.js";
 import carResponse from "./src/car-search.js";
 import updateRoute from "./src/update-route.js";
+import customDirections from "./src/custom-directions.js";
 import "dotenv/config.js";
 
 // require('dotenv').config();
