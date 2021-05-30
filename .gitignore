@@ -3,3 +3,4 @@ node_modules
 .idea/
 http.rest
 .env
+.vscode

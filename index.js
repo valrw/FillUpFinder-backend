@@ -1,7 +1,8 @@
 import express from "express";
-import directionsResponse from "./directions.js";
-import customDirections from "./custom-directions.js";
-import carResponse from "./car-search.js";
+import directionsResponse from "./src/directions.js";
+import carResponse from "./src/car-search.js";
+import updateRoute from "./src/update-route.js";
+import customDirections from "./src/custom-directions.js";
 import "dotenv/config.js";
 
 // require('dotenv').config();
@@ -14,10 +15,12 @@ app.get(
   directionsResponse
 );
 
+app.get("/api/update/", updateRoute);
+
 app.get(
   "/api/custom-directions/:start/:end/:fuelLeft/:fuelCap/:mpg/:calcOnGas/:numStops?/:removedStops?",
   customDirections
-)
+);
 
 const port = process.env.PORT || 9090;
 app.listen(port);
